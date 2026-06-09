@@ -58,7 +58,10 @@ class MonitorServer:
         self._stopped = True
         logger.info("monitor server shutting down")
         if self.ros_node is not None:
-            self.ros_node.destroy_node()
+            try:
+                self.ros_node.destroy_node()
+            except Exception as exc:  # rclpy destroy_node can raise on teardown
+                logger.warning("ros node teardown: %s", exc)
             self.ros_node = None
         if rclpy.ok():
             rclpy.shutdown()

@@ -164,6 +164,40 @@ class SupabaseStore:
     def insert_usage(self, rec: dict) -> None:
         self._request("POST", "/ui_usage_log", body=rec, prefer="return=minimal")
 
+    # ---- Event read/resolve (Option A: events are single-sourced in Supabase) ----
+    def list_events(self, limit: int = 50, active: bool = False) -> list[dict]:
+        q = f"/events?select=*&order=at.desc&limit={int(limit)}"
+        if active:
+            q += "&resolved=eq.0"
+        return self._request("GET", q) or []
+
+    def resolve_event(self, event_id: int, by: str = "operator") -> dict:
+        rows = self._request("GET", f"/events?id=eq.{int(event_id)}&select=id,resolved")
+        if not rows:
+            return {"error": "event not found"}
+        if rows[0].get("resolved"):
+            return {"ok": True, "already": True}
+        self._request(
+            "PATCH", f"/events?id=eq.{int(event_id)}",
+            body={"resolved": 1, "resolved_at": utc_now(), "resolved_by": by},
+            prefer="return=minimal")
+        return {"ok": True, "event_id": event_id, "resolved_by": by}
+
+    def event_stats(self) -> dict:
+        rows = self._request("GET", "/events?select=event_type,event_class,resolved") or []
+        by_type: dict[str, int] = {}
+        by_class: dict[str, int] = {}
+        active = 0
+        for r in rows:
+            if not r.get("resolved"):
+                active += 1
+            t = r.get("event_type") or "UNKNOWN"
+            by_type[t] = by_type.get(t, 0) + 1
+            c = r.get("event_class")
+            if c:
+                by_class[c] = by_class.get(c, 0) + 1
+        return {"total": len(rows), "active": active, "by_type": by_type, "by_class": by_class}
+
 
 # ---------------------------------------------------------------------------
 # Module-level dispatch

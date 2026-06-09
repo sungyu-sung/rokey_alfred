@@ -67,6 +67,27 @@ python3 main.py               # FMS_BACKEND=supabase -> Supabase로 write-only �
 | 로그인/세션 | Supabase Auth |
 | 폴링(2s) | Realtime 구독 + 5s 새로고침(online 신선도용) |
 
+## 이벤트 조치완료(resolve) 동기화 — Option A (이벤트 Supabase 단일 소스)
+
+보안팀(Vercel)이 이벤트를 조치완료하면 로컬 관제 모니터에서도 자동으로 사라지게(양방향) 하는 구성.
+이벤트는 **Supabase가 단일 소스**다. 로컬 대시보드도 이벤트 목록/조치완료/active 카운트를 Supabase에서
+읽고 쓴다(로봇 상태·usage 는 로컬 SQLite 유지).
+
+- 동작 조건: 로컬 서버 env 에 `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` 가 있으면 `api.py` 가 이벤트를
+  Supabase 로 라우팅한다(`store.SupabaseStore.list_events/resolve_event/event_stats`). 없으면 기존 SQLite.
+- 두 프로세스 실행:
+  ```bash
+  # 터미널 A — 펌프: ROS2 → Supabase (이벤트를 양 대시보드가 읽음)
+  set -a; source .env; set +a            # FMS_BACKEND=supabase
+  FMS_BACKEND=supabase python3 main.py
+
+  # 터미널 B — 로컬 관제: localhost:5000 (이벤트는 Supabase, 로봇/usage 는 SQLite)
+  set -a; source .env; set +a            # SUPABASE_URL/KEY 제공
+  FMS_BACKEND=sqlite python3 main.py     # ← sqlite 로 덮어써서 Flask 서빙
+  ```
+- 결과: 누가 어디서 조치완료를 눌러도 같은 Supabase 행이 `resolved=1` 이 되어 양쪽 active 목록에서 빠진다.
+- 로컬 SQLite 이벤트 적재는 오프라인 백업으로 계속됨(표시는 Supabase). 오프라인 폴백 표시는 미구현.
+
 ## 3D 관제 뷰 (web-vercel/viz/)
 
 `viz_3d` 를 `web-vercel/viz/` 로 번들. 대시보드 iframe `./viz/?norobot` 로 임베드.
