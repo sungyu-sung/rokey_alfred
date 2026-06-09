@@ -32,7 +32,11 @@ def _setup(context, *args, **kwargs):
              name="behavior_node", **common),
         Node(package="alfred_vision", executable="yolo_monitor_node",
              name="yolo_monitor_node", **common),
-        # TODO: Interaction 노드(ui/stt/llm/tts), nav2/localization, video_sender 추가
+        # 카메라 라이브 영상 WebRTC 송신(데이터 평면 — FMS/브리지 우회, 로봇↔브라우저 P2P).
+        # 구독 토픽·포트는 config/<robot_id>.yaml 의 video_sender_node 파라미터로 주입.
+        Node(package="alfred_vision", executable="video_sender_node",
+             name="video_sender_node", **common),
+        # TODO: Interaction 노드(ui/stt/llm/tts), nav2/localization 추가
     ]
 
 
