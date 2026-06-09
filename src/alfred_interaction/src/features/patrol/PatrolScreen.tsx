@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RobotFace, ScreenFrame } from '@/components';
+import { ButlerFace, ScreenFrame } from '@/components';
 import { floorLevel, kioskConfig, useStrings } from '@/config';
 import { isWakeWordSupported, useAnyInput, useWakeWord } from '@/core/hooks';
 import { useLanguage } from '@/core/i18n';
@@ -101,7 +101,7 @@ export function PatrolScreen() {
   return (
     <ScreenFrame tone="dark" className={styles.screen}>
       <div className={styles.body}>
-        <RobotFace size="xl" />
+        <ButlerFace size="xl" />
       </div>
       <div className={styles.hints}>
         <p className={styles.hint}>{strings.patrol.hint}</p>
