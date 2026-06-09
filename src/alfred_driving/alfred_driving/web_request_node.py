@@ -178,7 +178,7 @@ class WebRequestNode(Node):
 
     def try_finish(self):
         if self.escort_stage == "DONE" and self.continue_stage == "DONE":
-            self.get_logger().info("Relay complete — both robots docked. Sending robot2 back to patrol.")
+            self.get_logger().info("Relay complete — both robots at home. Sending robot2 back to patrol.")
             self.resume_patrol_pub.publish(Empty())
             self.reset()
 
@@ -296,10 +296,8 @@ class WebRequestNode(Node):
                 self.get_logger().info(f"robot2 reached destination, returning to {home_name}")
 
             elif robot == self.escort_robot and self.escort_stage == "TO_HOME":
-                self.send_dock(
-                    self.escort_robot,
-                    lambda r=self.escort_robot: self.mark_docked_and_try_finish(r)
-                )
+                self.escort_stage = "DONE"
+                self.try_finish()
 
             elif robot == self.continue_robot and self.continue_stage == "TO_GOAL":
                 self.continue_stage = "TO_HOME"
@@ -310,10 +308,8 @@ class WebRequestNode(Node):
                 )
 
             elif robot == self.continue_robot and self.continue_stage == "TO_HOME":
-                self.send_dock(
-                    self.continue_robot,
-                    lambda r=self.continue_robot: self.mark_docked_and_try_finish(r)
-                )
+                self.continue_stage = "DONE"
+                self.try_finish()
 
     def on_wait_complete(self):
         self.wait_timer.cancel()
