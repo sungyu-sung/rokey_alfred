@@ -6,6 +6,7 @@ export const initialKioskState: KioskState = {
   staffCallActive: false,
   session: null,
   alert: null,
+  waiting: null,
 };
 
 /**
@@ -77,6 +78,24 @@ export function kioskReducer(state: KioskState, event: KioskEvent): KioskState {
     case 'CLEAR_ALERT':
       // Staff dismissed the alert → back to a clean patrol.
       return state.screen === 'alert' ? { ...initialKioskState } : state;
+
+    case 'ENTER_CHARGING':
+      // Robot docked/charging takes over with a clean state (not during an alert).
+      return state.screen === 'alert'
+        ? state
+        : { ...initialKioskState, screen: 'charging' };
+
+    case 'ENTER_WAITING':
+      // Robot waiting / cross-floor handoff (keeps mode for VI announcements).
+      return state.screen === 'alert'
+        ? state
+        : { ...state, screen: 'waiting', waiting: event.info, session: null };
+
+    case 'EXIT_ROBOT_SCREEN':
+      // Robot back to PATROL → leave the charging/waiting screens only.
+      return state.screen === 'charging' || state.screen === 'waiting'
+        ? { ...initialKioskState }
+        : state;
 
     default:
       return state;

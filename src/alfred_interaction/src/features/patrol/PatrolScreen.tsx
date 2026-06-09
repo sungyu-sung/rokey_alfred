@@ -16,7 +16,7 @@ import styles from './PatrolScreen.module.css';
 const WAKE_WORDS = ['hello alfred', '헬로 알프레드', 'alfred', '알프레드'];
 
 const ANNOUNCE_DELAY_MS = 2000; // first prompt shortly after entering patrol
-const ANNOUNCE_INTERVAL_MS = 20000; // repeat period
+const ANNOUNCE_INTERVAL_MS = 60000; // repeat period
 const WAKE_GRACE_MS = 700; // keep wake word muted briefly after the prompt
 
 /**
