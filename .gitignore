@@ -1,0 +1,11 @@
+build/
+install/
+log/
+__pycache__/
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+viz_3d/node_modules/
+viz_3d/dist/
+CLAUDE.md
