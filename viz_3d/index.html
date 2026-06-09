@@ -363,7 +363,7 @@ function floorPlate(w,d){
 }
 
 // ---- item builders (group은 (x,0,z)에 위치 → 이동 쉬움) ----
-function makeZone(it){
+function makeZone(it,floor){
   const g=new THREE.Group();
   const col=new THREE.Color(STATUS[it.status||'ok']);
   const tile=new THREE.Mesh(new THREE.BoxGeometry(it.w,.6,it.d),
@@ -371,7 +371,9 @@ function makeZone(it){
   tile.position.y=.5; g.add(tile);
   const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(it.w,.6,it.d)),
     new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.8})); e.position.y=.5; g.add(e);
-  if(it.label){const lab=labelSprite(it.label,'#'+col.getHexString()); lab.position.y=14; g.add(lab);}
+  if(it.label){const lab=labelSprite(it.label,'#'+col.getHexString());
+    const ls=(LABEL_SCALE&&LABEL_SCALE[floor])||1; lab.scale.multiplyScalar(ls);
+    lab.position.y=14; g.add(lab);}
   g.userData.mainMesh=tile;
   return g;
 }
@@ -413,7 +415,7 @@ function makePillar(it){
 function makeItem(it,floor){
   let g, furn=false;
   switch(it.kind){
-    case 'zone': g=makeZone(it); break;
+    case 'zone': g=makeZone(it,floor); break;
     case 'wall': g=makeWall(it); break;
     case 'pillar': g=makePillar(it); break;
     case 'elevator': g=makeElevator(); furn=true; break;
@@ -438,17 +440,18 @@ function robotMarker(name='TB4'){
   ring.rotation.x=-Math.PI/2; ring.position.y=.4; g.add(ring); g.userData.ring=ring;
   const body=new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.6,4,24),
     new THREE.MeshStandardMaterial({color:0x0a3a5e,metalness:.7,roughness:.25,emissive:C.blue,emissiveIntensity:.6}));
-  body.position.y=2.5; g.add(body);
+  body.position.y=2.5; g.add(body); g.userData.body=body;
   const cap=new THREE.Mesh(new THREE.CylinderGeometry(3.4,3.4,.6,24),new THREE.MeshBasicMaterial({color:C.cyan}));
-  cap.position.y=4.8; g.add(cap);
+  cap.position.y=4.8; g.add(cap); g.userData.cap=cap;
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,26,8),new THREE.MeshBasicMaterial({color:C.cyan,transparent:true,opacity:.35}));
-  beam.position.y=15; g.add(beam);
+  beam.position.y=15; g.add(beam); g.userData.beam=beam;
   const lab=labelSprite(name); lab.scale.multiplyScalar(.7); lab.position.y=30; g.add(lab);
   return g;
 }
 // ===== Floor layout DATA (편집 가능) =====
 const PLATE={1:{W:144.9,D:67}, 2:{W:66.2,D:53.6}};   // 실측 비율(미터×18): 1F 8.05×3.72m, 2F 3.68×2.98m
 const FSCALE={1:0.7, 2:0.45};                          // 가구(엘베/에스컬/소파 등) 크기 층별 보정
+const LABEL_SCALE={1:1, 2:0.6};                        // 존 라벨 글씨 크기 층별 보정(2층 맵이 작아 축소)
 const DEFAULT_FLOOR_DATA = {
   1:[
     {id:'w1',kind:'wall',x:0,z:-33.5,w:144.9,d:0.7,h:11},
@@ -749,6 +752,19 @@ renderer.setSize(innerWidth,innerHeight);
 // ===== 실 로봇 연동: /api/robots 폴링 (Flask 같은 출처 /viz, 또는 :5173 Vite 프록시) =====
 const STATE_KO={IDLE:'대기',PATROL:'순찰',INTERACTING:'고객응대',RESERVED:'준비',HANDOVER_READY:'인계대기',
   WAITING_HANDOVER:'인수대기',ESCORTING:'에스코트중',RETURNING:'복귀중',EMERGENCY:'비상',ERROR:'오류'};
+// 로봇 상태 → 마커 색 (PATROL=기본 시안). 좌측 패널 상태 텍스트와 의미 일치.
+const STATE_COLOR={IDLE:0x94A3B8,PATROL:0x00BFFF,INTERACTING:0x34D399,RESERVED:0xFFC83D,
+  HANDOVER_READY:0xFFC83D,WAITING_HANDOVER:0xFFC83D,ESCORTING:0xA78BFA,RETURNING:0x008CFF,
+  EMERGENCY:0xFF4D5E,ERROR:0xFF4D5E};
+function setRobotColor(floor, state){
+  const r=robots[floor]; if(!r||!r.userData.ring) return;
+  const hex=(STATE_COLOR[state]!=null)?STATE_COLOR[state]:C.cyan;
+  const c=new THREE.Color(hex);
+  r.userData.ring.material.color.copy(c);
+  if(r.userData.cap)  r.userData.cap.material.color.copy(c);
+  if(r.userData.beam) r.userData.beam.material.color.copy(c);
+  if(r.userData.body) r.userData.body.material.emissive.copy(c);
+}
 const _pp={};  // 속도 추정용 직전 pose
 async function pollRobots(){
   try{
@@ -764,6 +780,7 @@ async function pollRobots(){
         _pp[r.robot_id]={x:p.x,y:p.y,t:now};
         setRobotPose(fl, p.x, p.y, p.theta||0);
       }
+      setRobotColor(fl, r.state);   // 상태별 마커 색
       if(fl===pf){   // 현재 보는 층 로봇 → 좌측 패널
         if(r.battery!=null){ $('batt').textContent=r.battery+'%'; $('battbar').style.width=Math.max(0,Math.min(100,r.battery))+'%'; }
         const v=_pp[r.robot_id+'_v']; $('spd').innerHTML=(v?v.toFixed(2):'0.00')+'<small style="font-size:10px"> m/s</small>';
