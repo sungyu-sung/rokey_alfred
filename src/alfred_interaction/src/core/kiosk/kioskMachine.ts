@@ -7,6 +7,8 @@ export const initialKioskState: KioskState = {
   session: null,
   alert: null,
   waiting: null,
+  escort: null,
+  chargeBattery: null,
 };
 
 /**
@@ -83,17 +85,44 @@ export function kioskReducer(state: KioskState, event: KioskEvent): KioskState {
       // Robot docked/charging takes over with a clean state (not during an alert).
       return state.screen === 'alert'
         ? state
-        : { ...initialKioskState, screen: 'charging' };
+        : {
+            ...initialKioskState,
+            screen: 'charging',
+            chargeBattery: event.battery ?? null,
+          };
 
     case 'ENTER_WAITING':
       // Robot waiting / cross-floor handoff (keeps mode for VI announcements).
       return state.screen === 'alert'
         ? state
-        : { ...state, screen: 'waiting', waiting: event.info, session: null };
+        : {
+            ...state,
+            screen: 'waiting',
+            waiting: event.info,
+            session: null,
+            escort: null,
+          };
+
+    case 'ROBOT_ESCORT':
+      // Robot-driven escort → guiding. A local session (user picked on the kiosk)
+      // takes priority in the screen, so we only fill `escort` for the no-session
+      // case; either way move to guiding.
+      return state.screen === 'alert'
+        ? state
+        : {
+            ...state,
+            screen: 'guiding',
+            escort: {
+              destinationName: event.destinationName ?? null,
+              ratio: event.ratio ?? 0,
+            },
+          };
 
     case 'EXIT_ROBOT_SCREEN':
-      // Robot back to PATROL → leave the charging/waiting screens only.
-      return state.screen === 'charging' || state.screen === 'waiting'
+      // Robot back to PATROL → leave robot-driven screens only (never a local escort).
+      return state.screen === 'charging' ||
+        state.screen === 'waiting' ||
+        (state.screen === 'guiding' && !!state.escort && !state.session)
         ? { ...initialKioskState }
         : state;
 

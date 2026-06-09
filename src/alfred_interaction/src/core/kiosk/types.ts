@@ -26,6 +26,14 @@ export interface WaitingInfo {
   toFloorId?: string;
 }
 
+/** Robot-driven escort context (screen === 'guiding' without a local session). */
+export interface RobotEscortInfo {
+  /** Resolved destination name to show, or null for a generic "안내중". */
+  destinationName: string | null;
+  /** Progress 0..1 for the bar. */
+  ratio: number;
+}
+
 /**
  * Accessibility mode. `visually_impaired` is entered by the patrol wake word
  * ("hello Alfred") and adds TTS to the whole flow; it resets to `general`
@@ -45,6 +53,10 @@ export interface KioskState {
   alert: DetectionType | null;
   /** Context while screen === 'waiting' (robot-state driven). */
   waiting: WaitingInfo | null;
+  /** Robot-driven escort context while screen === 'guiding' (no local session). */
+  escort: RobotEscortInfo | null;
+  /** Battery % while screen === 'charging' (from robot status), or null. */
+  chargeBattery: number | null;
 }
 
 export type KioskEvent =
@@ -61,6 +73,7 @@ export type KioskEvent =
   | { type: 'CLOSE_STAFF_CALL' }
   | { type: 'DETECTION'; detection: DetectionType } // YOLO alert (ver03) → alert
   | { type: 'CLEAR_ALERT' } // alert → patrol (staff dismiss)
-  | { type: 'ENTER_CHARGING' } // robot DOCKING / UNDOCKING → charging screen
+  | { type: 'ENTER_CHARGING'; battery?: number } // robot DOCKING / UNDOCKING → charging
   | { type: 'ENTER_WAITING'; info: WaitingInfo } // robot WAITING / FINISHED → waiting
-  | { type: 'EXIT_ROBOT_SCREEN' }; // charging/waiting → patrol (e.g. robot PATROL)
+  | { type: 'ROBOT_ESCORT'; destinationName?: string | null; ratio?: number } // ESCORT_* → guiding
+  | { type: 'EXIT_ROBOT_SCREEN' }; // robot screen → patrol (e.g. robot PATROL)
