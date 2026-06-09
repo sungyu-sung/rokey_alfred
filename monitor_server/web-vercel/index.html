@@ -114,7 +114,6 @@
     <button class="tab" data-tab="robots">로봇 상태</button>
     <button class="tab" data-tab="events">이벤트</button>
     <button class="tab" data-tab="map">3D 관제</button>
-    <button class="tab" data-tab="video">영상</button>
     <button class="tab" data-tab="system">시스템</button>
     <button class="tab" data-tab="search">검색</button>
   </nav>
@@ -131,10 +130,16 @@
         <h2>3D 관제 뷰</h2>
         <iframe class="map3d" src="./viz/?norobot"></iframe>
       </section>
-      <section>
-        <h2>활성 이벤트</h2>
-        <div id="overviewActiveEvents"></div>
-      </section>
+      <div>
+        <section>
+          <h2>활성 이벤트</h2>
+          <div id="overviewActiveEvents"></div>
+        </section>
+        <section>
+          <h2>로봇 상태</h2>
+          <div id="overviewRobotStatus"></div>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -210,16 +215,6 @@
     </section>
   </div>
 
-  <div id="tab-video" class="tabpanel">
-    <section>
-      <h2>로봇 카메라 영상 (WebRTC)</h2>
-      <div class="muted" style="margin-bottom:12px;font-size:12px">
-        미디어는 로봇↔브라우저 P2P(서버 우회) · 시그널링 URL은
-        <span class="mono">web/video_sources.json</span> 에서 각 로봇 IP로 설정
-      </div>
-      <div id="video-grid" class="video-grid"></div>
-    </section>
-  </div>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -233,7 +228,6 @@ document.querySelectorAll('.tab').forEach(btn=>{
     document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('on'));
     btn.classList.add('on');
     $(`tab-${btn.dataset.tab}`).classList.add('on');
-    if(btn.dataset.tab==='video') buildVideoGrid();
   });
 });
 
@@ -317,6 +311,18 @@ function renderRobotCards(robots){
     </div>`;
   }).join('') : '<div class="empty">수신된 로봇 상태 없음</div>';
   $('robotCards').innerHTML = html;
+}
+// 개요 탭 우측: 로봇별 현재 상태(PATROL/ESCORTING 등) 요약. 로봇 상태 탭은 별도 유지.
+function renderOverviewRobotStatus(robots){
+  $('overviewRobotStatus').innerHTML = robots.length ? robots.map(r=>`
+    <div class="row" style="padding:9px 0;border-bottom:1px solid var(--line)">
+      <div><b>${esc(r.robot_id)}</b> <span class="muted">${r.floor?`${r.floor}층`:''}</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="muted" style="font-size:12px">${r.battery ?? '-'}%</span>
+        <span class="badge ${badgeForState(r.state)}">${esc(r.state || 'UNKNOWN')}</span>
+        <span class="pill ${r.online?'onpill':'offpill'}">${r.online?'ON':'OFF'}</span>
+      </div>
+    </div>`).join('') : '<div class="empty">수신된 로봇 상태 없음</div>';
 }
 function renderRobotLog(data){
   const rows = (data.log || []).slice(-80).reverse();
@@ -418,6 +424,7 @@ async function load(){
     renderSummary(stats, sys);
     renderOps(stats);
     renderRobotCards(robots);
+    renderOverviewRobotStatus(robots);
     renderRobotLog(robotLog);
     renderEmergencyAlarms(active);
     renderEvents('overviewActiveEvents', active, true);
