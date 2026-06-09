@@ -28,6 +28,12 @@ def ros_event_topic(robot_id: str) -> str:
     return f"/{robot_id}/vision/alert"
 
 
+def ros_detection_topic(robot_id: str) -> str:
+    return f"/{robot_id}/detection/info"
+
+
+ROS_INFORMATION_TOPIC = os.getenv("FMS_ROS_INFORMATION_TOPIC", "/information")
+
 ROS_QOS_STATUS = int(os.getenv("FMS_ROS_QOS_STATUS", "10"))
 ROS_QOS_EVENT = int(os.getenv("FMS_ROS_QOS_EVENT", "10"))
 
