@@ -42,6 +42,12 @@ STATUS_TIMEOUT = float(os.getenv("FMS_STATUS_TIMEOUT", "10.0"))
 
 DB_PATH = os.getenv("FMS_DB_PATH", str(BASE_DIR / "fms.db"))
 
+# Storage backend for the ROS2 ingest pump: "sqlite" (local) or "supabase".
+BACKEND = os.getenv("FMS_BACKEND", "sqlite").lower()
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_TIMEOUT = float(os.getenv("SUPABASE_TIMEOUT", "8.0"))
+
 FLASK_HOST = os.getenv("FMS_FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.getenv("FMS_FLASK_PORT", "5000"))
 CORS_ORIGINS = os.getenv("FMS_CORS_ORIGINS", "*")

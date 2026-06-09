@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-import db
+import store
 
 
 logger = logging.getLogger("monitor.usage")
@@ -25,12 +25,14 @@ def record_information(payload: dict) -> None:
     customer = payload.get("customer") or {}
     language = customer.get("language") or payload.get("customer_language")
     profile = customer.get("profile") or payload.get("customer_profile")
-    at = payload.get("timestamp") or db.utc_now_iso()
+    at = payload.get("timestamp") or store.utc_now()
     escort_used = 1 if request_type == "ESCORT" else 0
 
-    db.execute(
-        "INSERT INTO ui_usage_log(source, language, customer_profile, escort_used, at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (request_type, language, profile, escort_used, at),
-    )
+    store.insert_usage({
+        "source": request_type,
+        "language": language,
+        "customer_profile": profile,
+        "escort_used": escort_used,
+        "at": at,
+    })
     logger.info("usage %s language=%s profile=%s", request_type, language, profile)
