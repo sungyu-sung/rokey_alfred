@@ -38,11 +38,11 @@ def _setup(context, *args, **kwargs):
              name="behavior_node", **common),
         Node(package="alfred_vision", executable="yolo_monitor_node",
              name="yolo_monitor_node", **common),
-        # TODO: Interaction 노드(ui/stt/llm/tts), nav2/localization, video_sender 추가
-        #
-        # all_robot_manager(전체 모니터)는 robot_id별 유닛이 아니라 두 로봇을 동시에
-        # 관찰하는 단일 전역 노드라 여기 포함하지 않는다 — 별도로 한 번만 기동한다:
-        #   ros2 run alfred_bridge all_robot_manager
+        # 카메라 라이브 영상 WebRTC 송신(데이터 평면 — FMS/브리지 우회, 로봇↔브라우저 P2P).
+        # 구독 토픽·포트는 config/<robot_id>.yaml 의 video_sender_node 파라미터로 주입.
+        Node(package="alfred_vision", executable="video_sender_node",
+             name="video_sender_node", **common),
+        # TODO: Interaction 노드(ui/stt/llm/tts), nav2/localization 추가
     ]
 
 

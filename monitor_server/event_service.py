@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 import db
-from states import EVENT_TYPES
+from states import EVENT_TYPE_ALIASES, EVENT_TYPES
 
 
 logger = logging.getLogger("fms.event")
@@ -17,7 +17,7 @@ logger = logging.getLogger("fms.event")
 
 def record_event(payload: dict) -> None:
     """Store IF-05 style detector events."""
-    event_type = payload.get("event_type")
+    event_type = EVENT_TYPE_ALIASES.get(payload.get("event_type"), payload.get("event_type"))
     robot_id = payload.get("robot_id")
     if event_type is None or robot_id is None:
         logger.warning("IF-05 missing event_type/robot_id: %s", payload)

@@ -35,6 +35,9 @@ def _count(sql: str, params: tuple = ()) -> int:
     return int((db.query_one(sql, params) or {}).get("c", 0))
 
 
+USAGE_PASSENGER_FILTER = "COALESCE(source, 'INTERACTING') NOT IN ('ESCORT', 'CANCEL')"
+
+
 def _row_to_robot(row: dict) -> dict:
     return {
         "robot_id": row.get("robot_id"),
@@ -255,7 +258,10 @@ def create_app(registry) -> Flask:
                 class_counts[row["event_class"]] = class_counts.get(row["event_class"], 0) + row["c"]
 
         languages = {"ko": 0, "zh": 0, "ja": 0, "en": 0, "etc": 0}
-        for row in db.query_all("SELECT language, COUNT(*) c FROM ui_usage_log GROUP BY language"):
+        for row in db.query_all(
+            "SELECT language, COUNT(*) c FROM ui_usage_log "
+            f"WHERE {USAGE_PASSENGER_FILTER} GROUP BY language"
+        ):
             code = (row["language"] or "").lower()[:2]
             if code in languages:
                 languages[code] += row["c"]
@@ -265,15 +271,17 @@ def create_app(registry) -> Flask:
         profiles = {
             row["customer_profile"] or "UNKNOWN": row["c"]
             for row in db.query_all(
-                "SELECT customer_profile, COUNT(*) c FROM ui_usage_log GROUP BY customer_profile")
+                "SELECT customer_profile, COUNT(*) c FROM ui_usage_log "
+                f"WHERE {USAGE_PASSENGER_FILTER} GROUP BY customer_profile")
         }
         counters = {
             row["name"]: row["value"]
             for row in db.query_all("SELECT name, value FROM monitor_counters")
         }
 
-        usage_count = _count("SELECT COUNT(*) c FROM ui_usage_log")
-        escort_count = _count("SELECT COUNT(*) c FROM ui_usage_log WHERE escort_used=1")
+        usage_count = _count(f"SELECT COUNT(*) c FROM ui_usage_log WHERE {USAGE_PASSENGER_FILTER}")
+        escort_count = _count(
+            "SELECT COUNT(*) c FROM ui_usage_log WHERE escort_used=1 OR source='ESCORT'")
         vulnerable = (
             profiles.get("ELDERLY", 0)
             + profiles.get("VISUALLY_IMPAIRED", 0)
@@ -332,6 +340,11 @@ def create_app(registry) -> Flask:
                     config.ros_event_topic(robot_id)
                     for robot_id in config.ROBOT_IDS
                 ],
+                "detection_topics": [
+                    config.ros_detection_topic(robot_id)
+                    for robot_id in config.ROBOT_IDS
+                ],
+                "information_topic": config.ROS_INFORMATION_TOPIC,
             },
             "db": {"ok": db_ok, "path": os.path.basename(config.DB_PATH)},
             "robots": {

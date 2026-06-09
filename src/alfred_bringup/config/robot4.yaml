@@ -15,3 +15,13 @@
 /robot4/yolo_monitor_node:
   ros__parameters:
     robot_id: robot4
+
+/robot4/video_sender_node:
+  ros__parameters:
+    # ⚠ 카메라 담당 확인 필요(미확정): OAK-D 가 실제로 publish 하는 compressed RGB 토픽으로 교체할 것.
+    #   아래는 TurtleBot4+OAK-D 기본 추정값. 'ros2 topic list | grep compressed' 로 실값 확인.
+    #   비압축(image_raw, sensor_msgs/Image)만 나오면 republish 하거나 송신 노드를 Image 구독으로 수정.
+    image_topic: /robot4/oakd/rgb/image_raw/compressed
+    http_host: 0.0.0.0
+    http_port: 8081        # 대시보드 video_sources.json 의 signal_url 포트와 일치
+    fps: 20

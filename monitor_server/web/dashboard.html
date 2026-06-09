@@ -302,7 +302,12 @@ function renderEvents(id, events, active=false){
 }
 function renderSystem(sys){
   const ros = sys.ros || {}, db = sys.db || {}, r = sys.robots || {}, c = sys.counts || {};
-  const topics = [...(ros.robot_state_topics || []), ...(ros.event_topics || [])].join(', ');
+  const topics = [
+    ...(ros.robot_state_topics || []),
+    ...(ros.event_topics || []),
+    ...(ros.detection_topics || []),
+    ...(ros.information_topic ? [ros.information_topic] : []),
+  ].join(', ');
   $('system').innerHTML = `<table>
     <tr><th>ROS2</th><td>${esc(ros.mode || 'direct')} · ${esc(topics || '-')}</td></tr>
     <tr><th>DB</th><td>${db.ok?'정상':'오류'} · ${esc(db.path)}</td></tr>
