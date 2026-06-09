@@ -32,7 +32,8 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from av import VideoFrame
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import CompressedImage
 
 try:
     import cv2
@@ -104,22 +105,35 @@ class VideoSenderNode(Node):
 
         self.holder = FrameHolder()
         self._frames = 0
-        self.create_subscription(Image, self.topic, self._on_image, 5)
+        # 카메라 스트림은 sensor_data QoS(BEST_EFFORT) — 불안정 wifi에서 reliable
+        # 대형 샘플 정체 방지 + best_effort 구독은 reliable 발행자와도 호환.
+        self.create_subscription(
+            CompressedImage, self.topic, self._on_image, qos_profile_sensor_data)
+        self._last_diag = 0
+        self._last_info = "(아직 수신 없음)"
+        self.create_timer(3.0, self._diag)  # 3초마다 무조건 출력(수신 0이어도)
         self.get_logger().info(
             f"video_sender_node 시작 · 토픽={self.topic} · "
             f"시그널링 http://{self.http_host}:{self.http_port}/offer"
         )
 
-    def _on_image(self, msg: Image) -> None:
-        # sensor_msgs/Image → BGR ndarray (cv_bridge 없이 직접 변환)
-        img = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)
-        if msg.encoding == 'rgb8':
-            img = img[:, :, ::-1]
-        self.holder.set(img.copy())
+    def _on_image(self, msg: CompressedImage) -> None:
+        # sensor_msgs/CompressedImage(JPEG) → BGR ndarray (cv_bridge 불필요)
         self._frames += 1
-        if self._frames % 100 == 0:
-            self.get_logger().info(
-                f"수신 프레임 {self._frames} · {msg.width}x{msg.height}")
+        buf = np.frombuffer(msg.data, dtype=np.uint8)
+        img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        if img is not None:
+            self.holder.set(img)
+            self._last_info = f"{len(msg.data)}B · '{msg.format}' · {img.shape[1]}x{img.shape[0]} OK"
+        else:
+            self._last_info = f"{len(msg.data)}B · '{msg.format}' · decode FAIL"
+
+    def _diag(self) -> None:
+        # 프레임이 0이어도 3초마다 무조건 호출됨 → 노드가 살아있는지/수신되는지 분리 확인
+        delta = self._frames - self._last_diag
+        self._last_diag = self._frames
+        self.get_logger().info(
+            f"[진단] 최근 3초 {delta}프레임 (누적 {self._frames}) · {self._last_info}")
 
 
 # ── 시그널링 HTTP 서버 (aiohttp, asyncio 루프) ─────────────────────────────
