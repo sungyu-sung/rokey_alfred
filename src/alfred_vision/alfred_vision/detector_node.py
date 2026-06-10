@@ -52,7 +52,6 @@ class DetectorNode(Node):
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # OAK-D는 BEST_EFFORT QoS로 publish — 맞춰줘야 수신 가능
         qos_be = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 
         self._lock            = threading.Lock()
@@ -103,7 +102,6 @@ class DetectorNode(Node):
             buf   = np.frombuffer(rgb_msg.data, dtype=np.uint8)
             frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
 
-            # compressedDepth 포맷: 앞 12바이트는 헤더 → 제거 후 디코드
             depth_arr = np.frombuffer(bytes(depth_msg.data)[12:], dtype=np.uint8)
             depth = cv2.imdecode(depth_arr, cv2.IMREAD_ANYDEPTH)
 
@@ -116,7 +114,6 @@ class DetectorNode(Node):
                 self._depth        = depth
                 self._camera_frame = depth_msg.header.frame_id
 
-            # 독 근접 시 추론 스킵 — 충전/도킹 중 오탐 방지
             if self._near_dock():
                 return
 
@@ -177,13 +174,11 @@ class DetectorNode(Node):
                 if event_type is None:
                     continue
 
-                # 클래스별 confidence 임계값 적용
                 if conf < CONF_MAP.get(cls_name, CONF_THRESH):
                     continue
 
                 cu, cv_ = (x1 + x2) // 2, (y1 + y2) // 2
 
-                # bbox 중심이 화면 상단 30% 이내면 스킵 — 천장/벽 오탐 방지
                 if cv_ < frame.shape[0] * 0.3:
                     continue
 
@@ -228,23 +223,25 @@ class DetectorNode(Node):
                 self._confirm_counts[et] = 0
 
         confirmed = []
-        now_ts = time.monotonic()
+        now_ts    = time.monotonic()
         for ev in events:
             et = ev['event_type']
             self._confirm_counts[et] = self._confirm_counts.get(et, 0) + 1
             if self._confirm_counts[et] < 2:
                 continue
 
-            active = self._active_events.get(et)
-            if active is not None:
-                ax, ay, at = active
-                elapsed = now_ts - at
-                if elapsed < 600.0:
-                    x, y = ev['obj_x'], ev['obj_y']
-                    if x is None or ax is None:
-                        continue
-                    if math.hypot(x - ax, y - ay) < 1.0:
-                        continue
+            # SUSPICIOUS_PERSON은 dedup 없이 매 confirm마다 발행 — handler가 위치 추적에 사용
+            if et != 'SUSPICIOUS_PERSON':
+                active = self._active_events.get(et)
+                if active is not None:
+                    ax, ay, at = active
+                    elapsed = now_ts - at
+                    if elapsed < 600.0:
+                        x, y = ev['obj_x'], ev['obj_y']
+                        if x is None or ax is None:
+                            continue
+                        if math.hypot(x - ax, y - ay) < 1.0:
+                            continue
 
             confirmed.append(ev)
             self._active_events[et] = (ev['obj_x'], ev['obj_y'], now_ts)
