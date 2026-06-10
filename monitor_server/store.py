@@ -172,7 +172,7 @@ class SupabaseStore:
         return self._request("GET", q) or []
 
     def resolve_event(self, event_id: int, by: str = "operator") -> dict:
-        rows = self._request("GET", f"/events?id=eq.{int(event_id)}&select=id,resolved")
+        rows = self._request("GET", f"/events?id=eq.{int(event_id)}&select=id,resolved,robot_id")
         if not rows:
             return {"error": "event not found"}
         if rows[0].get("resolved"):
@@ -181,7 +181,7 @@ class SupabaseStore:
             "PATCH", f"/events?id=eq.{int(event_id)}",
             body={"resolved": 1, "resolved_at": utc_now(), "resolved_by": by},
             prefer="return=minimal")
-        return {"ok": True, "event_id": event_id, "resolved_by": by}
+        return {"ok": True, "event_id": event_id, "resolved_by": by, "robot_id": rows[0].get("robot_id")}
 
     def event_stats(self) -> dict:
         rows = self._request("GET", "/events?select=event_type,event_class,resolved") or []

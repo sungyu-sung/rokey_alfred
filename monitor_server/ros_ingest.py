@@ -6,7 +6,7 @@ import json
 import logging
 
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 
 import config
 import event_service
@@ -23,6 +23,13 @@ class RosIngestNode(Node):
         super().__init__("monitor_server_ros_ingest")
         self.registry = registry
         self._subscriptions = []
+
+        # 조치완료 publisher — 각 로봇 네임스페이스별
+        self._resolve_pubs: dict[str, object] = {}
+        for robot_id in config.ROBOT_IDS:
+            topic = f"/{robot_id}/emergency_resolve"
+            self._resolve_pubs[robot_id] = self.create_publisher(Empty, topic, 10)
+            logger.info("publisher ready: %s", topic)
 
         for robot_id in config.ROBOT_IDS:
             status_topic = config.ros_robot_state_topic(robot_id)
@@ -65,6 +72,15 @@ class RosIngestNode(Node):
             )
         )
         logger.info("subscribed ROS2 %s", config.ROS_INFORMATION_TOPIC)
+
+    def resolve_emergency(self, robot_id: str) -> None:
+        """monitor 조치완료 버튼 → 해당 로봇의 emergency_resolve 토픽 publish."""
+        pub = self._resolve_pubs.get(robot_id)
+        if pub is None:
+            logger.warning("resolve_emergency: unknown robot_id '%s'", robot_id)
+            return
+        pub.publish(Empty())
+        logger.info("emergency_resolve published → /%s/emergency_resolve", robot_id)
 
     def _on_robot_state(self, msg: RobotState) -> None:
         self.registry.update_from_ros_state(msg)

@@ -103,7 +103,7 @@ def _robot_snapshots() -> list[dict]:
     return merged
 
 
-def create_app(registry) -> Flask:
+def create_app(registry, ros_node=None) -> Flask:
     app = Flask(__name__)
     app.secret_key = config.SECRET_KEY or os.urandom(24)
     CORS(app, resources={r"/api/*": {"origins": config.CORS_ORIGINS}})
@@ -213,8 +213,12 @@ def create_app(registry) -> Flask:
         user = session.get("user", "operator")
         if _sb_events:
             res = _sb_events.resolve_event(event_id, by=user)
+            if not res.get("error"):
+                robot_id = res.get("robot_id")
+                if ros_node and robot_id:
+                    ros_node.resolve_emergency(robot_id)
             return jsonify(res), (404 if res.get("error") else 200)
-        ev = db.query_one("SELECT id, resolved FROM events WHERE id=?", (event_id,))
+        ev = db.query_one("SELECT id, resolved, robot_id FROM events WHERE id=?", (event_id,))
         if not ev:
             return jsonify({"error": "event not found"}), 404
         if ev["resolved"]:
@@ -222,6 +226,9 @@ def create_app(registry) -> Flask:
         db.execute(
             "UPDATE events SET resolved=1, resolved_at=?, resolved_by=? WHERE id=?",
             (db.utc_now_iso(), user, event_id))
+        robot_id = ev.get("robot_id")
+        if ros_node and robot_id:
+            ros_node.resolve_emergency(robot_id)
         return jsonify({"ok": True, "event_id": event_id, "resolved_by": user})
 
     @app.get("/api/robot_log")
@@ -391,8 +398,8 @@ def create_app(registry) -> Flask:
     return app
 
 
-def run_api(registry, host: str | None = None, port: int | None = None) -> None:
-    app = create_app(registry)
+def run_api(registry, ros_node=None, host: str | None = None, port: int | None = None) -> None:
+    app = create_app(registry, ros_node)
     host = host or config.FLASK_HOST
     port = port or config.FLASK_PORT
     logger.info("Flask API on http://%s:%s", host, port)
