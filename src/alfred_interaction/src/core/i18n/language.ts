@@ -68,6 +68,9 @@ export interface AppStrings {
   };
   guiding: {
     caption: string;
+    /** Robot-driven escort, before the robot reports ESCORT_* (IF-02). */
+    preparing: string;
+    preparingTo: (name: string) => string;
     toDestination: (name: string) => string;
     viaTransfer: (via: string, toFloor: string) => string;
     handoff: (toFloor: string) => string;

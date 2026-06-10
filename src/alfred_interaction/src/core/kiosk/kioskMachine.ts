@@ -115,6 +115,7 @@ export function kioskReducer(state: KioskState, event: KioskEvent): KioskState {
             escort: {
               destinationName: event.destinationName ?? null,
               ratio: event.ratio ?? 0,
+              preparing: event.preparing ?? false,
             },
           };
 

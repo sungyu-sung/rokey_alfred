@@ -38,6 +38,8 @@ export function RobotStateProvider({ children }: { children: ReactNode }) {
           type: 'ROBOT_ESCORT',
           destinationName: resolveDestinationName(msg.destination, language),
           ratio: msg.progress,
+          // The robot reports it's actively escorting → leave "preparing".
+          preparing: false,
         });
         return;
       }

@@ -34,6 +34,9 @@ const rosbridgeUrl =
   rosbridgeUrlOverride ||
   (rosbridgeHost ? `ws://${rosbridgeHost}:${rosbridgePort}` : '');
 
+/** Force mocks (no API keys / proxy needed) — for offline dev. */
+const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
+
 export const env = {
   /** 1 or 2 — which floor this kiosk's robot serves. */
   floorNumber: floorRaw === '2' ? 2 : 1,
@@ -42,7 +45,7 @@ export const env = {
     ? defaultLang
     : DEFAULT_LANGUAGE) as Language,
   /** Force mocks (no API keys / proxy needed) — for offline dev. */
-  useMocks: import.meta.env.VITE_USE_MOCKS === 'true',
+  useMocks,
   /** Backend proxy base (holds Soniox + Anthropic keys). */
   apiBase: str(import.meta.env.VITE_API_BASE, '/api').replace(/\/$/, ''),
   /** Soniox real-time model. */
@@ -54,6 +57,12 @@ export const env = {
    * Empty → mock FMS (console only).
    */
   rosbridgeUrl,
+  /**
+   * True when a real robot drives this kiosk via inbound /robotN/ui_state
+   * (rosbridge live + mocks off). The local escort simulation is then suppressed
+   * so the robot — not a kiosk timer — owns the guiding screen and its completion.
+   */
+  robotDrivesUi: !useMocks && !!rosbridgeUrl,
   /** ROS topic carrying IF-01 customer requests (정의서 IF-01). */
   rosInfoTopic: str(import.meta.env.VITE_ROS_INFO_TOPIC, '/information'),
   /**

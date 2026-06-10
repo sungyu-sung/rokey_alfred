@@ -49,6 +49,8 @@ const ko: AppStrings = {
   },
   guiding: {
     caption: '시설 안내중',
+    preparing: '안내 준비 중',
+    preparingTo: (name) => `${name}(으)로 안내를 준비하고 있어요`,
     toDestination: (name) => `${name} (으)로 안내하고 있어요`,
     viaTransfer: (via, toFloor) =>
       `${via}(으)로 이동 후 ${toFloor}에서 이어서 안내해요`,
@@ -118,6 +120,8 @@ const en: AppStrings = {
   },
   guiding: {
     caption: 'Guiding you',
+    preparing: 'Getting ready',
+    preparingTo: (name) => `Getting ready to guide you to ${name}`,
     toDestination: (name) => `Guiding you to ${name}`,
     viaTransfer: (via, toFloor) =>
       `Via the ${via}, then continuing on ${toFloor}`,
@@ -187,6 +191,8 @@ const ja: AppStrings = {
   },
   guiding: {
     caption: 'ご案内中',
+    preparing: 'ご案内の準備中',
+    preparingTo: (name) => `${name}へのご案内を準備しています`,
     toDestination: (name) => `${name}へご案内しています`,
     viaTransfer: (via, toFloor) =>
       `${via}へ移動後、${toFloor}で続けてご案内します`,
@@ -255,6 +261,8 @@ const zh: AppStrings = {
   },
   guiding: {
     caption: '正在带路',
+    preparing: '正在准备',
+    preparingTo: (name) => `正在准备带您前往${name}`,
     toDestination: (name) => `正在带您前往${name}`,
     viaTransfer: (via, toFloor) => `先前往${via}，再在${toFloor}继续带路`,
     handoff: (toFloor) => `${toFloor}的机器人将继续为您带路`,

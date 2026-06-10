@@ -32,6 +32,12 @@ export interface RobotEscortInfo {
   destinationName: string | null;
   /** Progress 0..1 for the bar. */
   ratio: number;
+  /**
+   * True between the kiosk confirming a destination (IF-01 sent) and the robot
+   * reporting ESCORT_1F/2F — shows a "준비 중" screen. Cleared once the robot's
+   * inbound state takes over.
+   */
+  preparing: boolean;
 }
 
 /**
@@ -75,5 +81,11 @@ export type KioskEvent =
   | { type: 'CLEAR_ALERT' } // alert → patrol (staff dismiss)
   | { type: 'ENTER_CHARGING'; battery?: number } // robot DOCKING / UNDOCKING → charging
   | { type: 'ENTER_WAITING'; info: WaitingInfo } // robot WAITING / FINISHED → waiting
-  | { type: 'ROBOT_ESCORT'; destinationName?: string | null; ratio?: number } // ESCORT_* → guiding
+  | {
+      type: 'ROBOT_ESCORT';
+      destinationName?: string | null;
+      ratio?: number;
+      /** Kiosk-initiated, robot not yet started → show "준비 중". */
+      preparing?: boolean;
+    } // ESCORT_* → guiding
   | { type: 'EXIT_ROBOT_SCREEN' }; // robot screen → patrol (e.g. robot PATROL)

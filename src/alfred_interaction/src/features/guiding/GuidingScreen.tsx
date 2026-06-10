@@ -28,18 +28,26 @@ export function GuidingScreen() {
   const arrived = session?.progress.phase === 'arrived';
   const vi = mode === 'visually_impaired';
   const hasContent = !!session || !!escort;
+  // Kiosk confirmed a destination but the robot hasn't reported ESCORT_* yet.
+  const preparing = !session && !!escort?.preparing;
   // Only a local (user-initiated) escort can be cancelled from the kiosk; the
   // robot owns its own escort.
   const canCancel = !!session && !arrived;
 
-  const caption = arrived ? strings.guiding.arrived : strings.guiding.caption;
+  const caption = preparing
+    ? strings.guiding.preparing
+    : arrived
+      ? strings.guiding.arrived
+      : strings.guiding.caption;
   // Subtitle: rich from the local session, else the robot-provided destination.
   const subtitle = session
     ? arrived
       ? undefined
       : describe(session, strings, language)
     : escort?.destinationName
-      ? strings.guiding.toDestination(escort.destinationName)
+      ? preparing
+        ? strings.guiding.preparingTo(escort.destinationName)
+        : strings.guiding.toDestination(escort.destinationName)
       : undefined;
   const ratio = Math.min(
     1,
