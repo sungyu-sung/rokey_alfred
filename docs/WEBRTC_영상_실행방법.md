@@ -25,12 +25,15 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp     # 보통 .bashrc에 이미 있�
 
 ## 1. 대시보드(monitor 서버) 실행
 
-⚠️ **반드시 `FMS_BACKEND=sqlite` 로컬 모드로 띄워야 영상 탭이 있는 :5000 대시보드가 뜬다.**
-`FMS_BACKEND=supabase`(셸에 export돼 있을 수 있음)면 Supabase 펌프만 돌고 **로컬 API 없음**.
+⚠️ **`FMS_BACKEND=sqlite`로 띄워야** 영상 탭이 있는 :5000 로컬 대시보드가 뜬다(supabase면 펌프만, 로컬 API 없음).
+⚠️ **단, `.env`(SUPABASE_URL/KEY)도 함께 로드해야** 이벤트가 Supabase 단일 소스로 공유된다.
+`SUPABASE_URL`이 없으면 로컬 대시보드가 자기 sqlite 이벤트로 폴백 → Vercel과 조치(resolve)가 따로 논다.
 
 ```bash
 cd ~/alfred_ws/monitor_server
-FMS_BACKEND=sqlite python3 main.py    # http://<이 머신 IP>:5000 (예: http://192.168.107.77:5000)
+set -a; source .env; set +a              # SUPABASE_URL/KEY 로드 (이벤트 Supabase 공유)
+FMS_BACKEND=sqlite python3 main.py       # 인라인 override → 로컬 :5000 유지, 상태는 sqlite
+#   http://<이 머신 IP>:5000 (예: http://192.168.107.77:5000)
 ```
 
 - `supabase` 모드 = ROS2 → Supabase 펌프(로컬 대시보드 X). Vercel 공개 대시보드는 로봇

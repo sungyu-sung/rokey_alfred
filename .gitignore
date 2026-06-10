@@ -48,3 +48,6 @@ fms_server/web/maps/maps.json
 .vscode/browse.vc.db
 .vscode/*.vc.db
 .vscode/colcon.env
+
+# Claude Code 세션 데이터
+.claude/

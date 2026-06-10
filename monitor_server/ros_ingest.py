@@ -20,7 +20,9 @@ logger = logging.getLogger("monitor.ros")
 
 class RosIngestNode(Node):
     def __init__(self, registry: RobotRegistry) -> None:
-        super().__init__("monitor_server_ros_ingest")
+        # 노드 이름에 백엔드 접미사 — sqlite 대시보드와 supabase 펌프를 동시에 띄울 때
+        # 같은 노드 이름이면 ROS2 discovery/구독이 충돌해 한쪽이 메시지를 못 받는다.
+        super().__init__(f"monitor_server_ros_ingest_{config.BACKEND}")
         self.registry = registry
         self._subscriptions = []
 
