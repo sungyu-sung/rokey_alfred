@@ -23,8 +23,9 @@ from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 from alfred_vision.vision_resource import (
-    DEFAULT_MODEL, CONF_THRESH, SNAPSHOT_DIR, DEPTH_PATCH,
+    DEFAULT_MODEL, CONF_THRESH, CONF_MAP, SNAPSHOT_DIR, DEPTH_PATCH,
     ROBOT_ID_MAP, FLOOR_MAP, EVENT_TYPE_MAP, EVENT_COLOR,
+    DOCK_POSITIONS, DOCK_RADIUS,
 )
 
 
@@ -51,6 +52,7 @@ class DetectorNode(Node):
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+        # OAK-D는 BEST_EFFORT QoS로 publish — 맞춰줘야 수신 가능
         qos_be = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 
         self._lock            = threading.Lock()
@@ -60,8 +62,8 @@ class DetectorNode(Node):
         self._first_frame     = True
         self._last_infer_time = 0.0
 
-        self._confirm_counts  = {}  # event_type -> 연속 감지 횟수
-        self._active_events   = {}  # event_type -> (x, y, timestamp)
+        self._confirm_counts = {}
+        self._active_events  = {}
 
         self.create_subscription(
             CameraInfo,
@@ -100,8 +102,11 @@ class DetectorNode(Node):
         try:
             buf   = np.frombuffer(rgb_msg.data, dtype=np.uint8)
             frame = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+
+            # compressedDepth 포맷: 앞 12바이트는 헤더 → 제거 후 디코드
             depth_arr = np.frombuffer(bytes(depth_msg.data)[12:], dtype=np.uint8)
             depth = cv2.imdecode(depth_arr, cv2.IMREAD_ANYDEPTH)
+
             if frame is None or depth is None:
                 return
             if self._first_frame:
@@ -110,9 +115,26 @@ class DetectorNode(Node):
             with self._lock:
                 self._depth        = depth
                 self._camera_frame = depth_msg.header.frame_id
+
+            # 독 근접 시 추론 스킵 — 충전/도킹 중 오탐 방지
+            if self._near_dock():
+                return
+
             self._process(frame, rgb_msg.header)
         except Exception as e:
             self.get_logger().error(f'[{self.ns}] 동기화 콜백 오류: {e}')
+
+    def _near_dock(self) -> bool:
+        dock_pos = DOCK_POSITIONS.get(self.ns)
+        if dock_pos is None:
+            return False
+        try:
+            t  = self.tf_buffer.lookup_transform('map', 'base_link', Time(), timeout=Duration(seconds=0.3))
+            rx = t.transform.translation.x
+            ry = t.transform.translation.y
+            return math.hypot(rx - dock_pos[0], ry - dock_pos[1]) < DOCK_RADIUS
+        except Exception:
+            return False
 
     def _depth_at(self, depth: np.ndarray, u: int, v: int) -> float:
         h, w = depth.shape[:2]
@@ -151,10 +173,17 @@ class DetectorNode(Node):
                 conf       = float(box.conf[0])
                 cls_name   = self.model.names[int(box.cls[0])]
                 event_type = EVENT_TYPE_MAP.get(cls_name)
+
                 if event_type is None:
                     continue
 
+                # 클래스별 confidence 임계값 적용
+                if conf < CONF_MAP.get(cls_name, CONF_THRESH):
+                    continue
+
                 cu, cv_ = (x1 + x2) // 2, (y1 + y2) // 2
+
+                # bbox 중심이 화면 상단 30% 이내면 스킵 — 천장/벽 오탐 방지
                 if cv_ < frame.shape[0] * 0.3:
                     continue
 
@@ -193,11 +222,10 @@ class DetectorNode(Node):
         img_msg.header = header
         self._pub_img.publish(img_msg)
 
-        # ── 1. 확증 카운터: 이번 프레임에서 감지된 event_type 집합 ──────────
         detected_types = {ev['event_type'] for ev in events}
         for et in list(self._confirm_counts):
             if et not in detected_types:
-                self._confirm_counts[et] = 0  # 이번 프레임 미감지 → 리셋
+                self._confirm_counts[et] = 0
 
         confirmed = []
         now_ts = time.monotonic()
@@ -205,24 +233,22 @@ class DetectorNode(Node):
             et = ev['event_type']
             self._confirm_counts[et] = self._confirm_counts.get(et, 0) + 1
             if self._confirm_counts[et] < 2:
-                continue  # 아직 확증 안 됨
+                continue
 
-            # ── 2. 중복 억제: 10분 이내 같은 위치(1.0m) 동일 이벤트 ──────
             active = self._active_events.get(et)
             if active is not None:
                 ax, ay, at = active
                 elapsed = now_ts - at
-                if elapsed < 600.0:  # 10분
+                if elapsed < 600.0:
                     x, y = ev['obj_x'], ev['obj_y']
                     if x is None or ax is None:
-                        continue  # 위치 모르면 동일 사건으로 간주
+                        continue
                     if math.hypot(x - ax, y - ay) < 1.0:
-                        continue  # 동일 사건 — 억제
-                # 10분 초과 or 위치 1.0m 이상 이탈 → 새 사건
+                        continue
 
             confirmed.append(ev)
             self._active_events[et] = (ev['obj_x'], ev['obj_y'], now_ts)
-            self._confirm_counts[et] = 0  # pub 후 카운터 리셋
+            self._confirm_counts[et] = 0
 
         if not confirmed:
             return

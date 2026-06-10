@@ -1,3 +1,4 @@
+import json
 import math
 import time
 from geometry_msgs.msg import PoseStamped
@@ -6,8 +7,9 @@ from rclpy.duration import Duration
 from rclpy.time import Time
 
 _NAV_UPDATE_THRESHOLD = 0.3
-_TARGET_LOST_SEC      = 10.0
+_TARGET_LOST_SEC      = 30.0
 _APPROACH_OFFSET      = 0.2
+_SUSPICIOUS_CLASSES   = {'pistol2', 'knife'}
 
 
 class SuspiciousHandler:
@@ -26,33 +28,54 @@ class SuspiciousHandler:
         self._pub_resume = node.create_publisher(Empty,       f'{ns}/resume_patrol_request', 10)
         self._patrol_stopped = False
 
-        node.create_subscription(String, f'{ns}/nav_status', self._cb_nav_status, 10)
+        node.create_subscription(String, f'{ns}/nav_status',      self._cb_nav_status, 10)
+        # Astra 고정 카메라 감지 토픽 — 항상 구독, active 시에만 처리
+        node.create_subscription(String, '/astra/detection/info', self._cb_astra,      10)
 
     def is_active(self) -> bool:
         return self._following
 
     def handle(self, payload: dict):
+        """OAK-D 최초 트리거 — 정지 요청 + watchdog 시작. 추적 중에는 재진입 무시."""
+        if self._following:
+            return
         cls  = payload.get('class', '?')
         conf = payload.get('confidence', 0)
-        loc  = payload.get('location', {})
-        x    = loc.get('x')
-        y    = loc.get('y')
-
         self._node.get_logger().info(f'[{self._ns}] 수상한 인물 감지: {cls} (conf={conf})')
+
+        self._following  = True
+        self._last_seen  = time.monotonic()
+
+        if self._has_patrol:
+            self._patrol_stopped = False
+            self._pub_stop.publish(Empty())
+            self._node.get_logger().info(f'[{self._ns}] 패트롤 정지 요청 → Astra 추적 대기')
+        else:
+            # 순찰 없는 로봇(robot4): 바로 Astra 추적 시작
+            self._patrol_stopped = True
+            self._node.get_logger().info(f'[{self._ns}] 순찰 없음 → 바로 Astra 추적 시작')
+
+        self._watchdog = self._node.create_timer(_TARGET_LOST_SEC, self._check_lost)
+
+    def _cb_astra(self, msg: String):
+        """Astra 감지 콜백 — 추적 중일 때만 처리, 수상한 클래스만 필터링."""
+        if not self._following:
+            return
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+
+        if data.get('class') not in _SUSPICIOUS_CLASSES:
+            return
+
         self._last_seen = time.monotonic()
 
-        if not self._following:
-            self._following = True
-            if self._has_patrol:
-                self._patrol_stopped = False
-                self._pub_stop.publish(Empty())
-                self._node.get_logger().info(f'[{self._ns}] 패트롤 정지 요청')
-            else:
-                # 순찰 없는 로봇: 바로 추적 시작
-                self._patrol_stopped = True
-                self._node.get_logger().info(f'[{self._ns}] 순찰 없음 → 바로 추적 시작')
-            self._watchdog = self._node.create_timer(_TARGET_LOST_SEC, self._check_lost)
+        loc = data.get('location', {})
+        x   = loc.get('x')
+        y   = loc.get('y')
 
+        # patrol_stopped 전에는 goal 발행 안 함 — 이동 중 goal 충돌 방지
         if x is not None and y is not None and self._patrol_stopped:
             self._update_goal(x, y)
 
@@ -73,13 +96,13 @@ class SuspiciousHandler:
     def _cb_nav_status(self, msg: String):
         if msg.data.startswith('patrol_stopped') and self._following and not self._patrol_stopped:
             self._patrol_stopped = True
-            self._node.get_logger().info(f'[{self._ns}] patrol_stopped 확인 → 추적 시작')
+            self._node.get_logger().info(f'[{self._ns}] patrol_stopped 확인 → Astra 추적 시작')
 
     def _check_lost(self):
         if time.monotonic() - self._last_seen < _TARGET_LOST_SEC:
             return
 
-        self._node.get_logger().info(f'[{self._ns}] 타겟 소실 → 패트롤 재개')
+        self._node.get_logger().info(f'[{self._ns}] Astra 타겟 소실 {_TARGET_LOST_SEC}s → 패트롤 재개')
 
         if self._watchdog:
             self._watchdog.cancel()
