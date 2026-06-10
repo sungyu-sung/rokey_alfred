@@ -38,6 +38,12 @@ export interface RobotEscortInfo {
    * inbound state takes over.
    */
   preparing: boolean;
+  /**
+   * True after the robot reports ESCORT_COMPLETED — shows the "도착했어요!" screen
+   * briefly, then a timer (RobotStateProvider) returns to patrol. A trailing
+   * PATROL is ignored while this holds (see EXIT_ROBOT_SCREEN).
+   */
+  arrived: boolean;
 }
 
 /**
@@ -88,4 +94,5 @@ export type KioskEvent =
       /** Kiosk-initiated, robot not yet started → show "준비 중". */
       preparing?: boolean;
     } // ESCORT_* → guiding
+  | { type: 'ROBOT_ARRIVED' } // ESCORT_COMPLETED → "도착했어요!" hold → patrol
   | { type: 'EXIT_ROBOT_SCREEN' }; // robot screen → patrol (e.g. robot PATROL)
