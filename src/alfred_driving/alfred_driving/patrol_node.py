@@ -383,6 +383,7 @@ def main(args=None):
             monitor.escort_goal_name = None
             monitor.resume_requested = False
 
+        monitor.publish_patrol_resumed()
         navigator.info('Relay finished — resuming patrol.')
 
     monitor.destroy_node()

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-import os
 import json
+import math
+import time
 import uuid
 import threading
 import numpy as np
 from datetime import datetime, timezone
-from pathlib import Path
-
 
 import cv2
 import rclpy
@@ -23,37 +22,10 @@ import tf2_geometry_msgs
 from cv_bridge import CvBridge
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 
-DEFAULT_MODEL = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', '..', 'share',
-    'alfred_vision', 'resource', 'best.pt'
+from alfred_vision.vision_resource import (
+    DEFAULT_MODEL, CONF_THRESH, SNAPSHOT_DIR, DEPTH_PATCH,
+    ROBOT_ID_MAP, FLOOR_MAP, EVENT_TYPE_MAP, EVENT_COLOR,
 )
-CONF_THRESH  = 0.4
-SNAPSHOT_DIR = Path('/tmp/detection_snapshots')
-DEPTH_PATCH  = 4
-
-ROBOT_ID_MAP = {
-    '/robot2': 'robot2',
-    '/robot4': 'robot4',
-}
-FLOOR_MAP = {
-    '/robot2': 1,
-    '/robot4': 2,
-}
-EVENT_TYPE_MAP = {
-    'fire':    'FIRE',
-    'patient': 'INJURED_PERSON',
-    'pistol2': 'SUSPICIOUS_PERSON',
-    'knife':   'SUSPICIOUS_PERSON',
-    'wallet':  'LOST_ITEM',
-    'bag':     'LOST_ITEM',
-    'phone':   'LOST_ITEM',
-}
-EVENT_COLOR = {
-    'FIRE':              (0,   60,  255),
-    'INJURED_PERSON':    (0,   165, 255),
-    'SUSPICIOUS_PERSON': (0,   255, 255),
-    'LOST_ITEM':         (255, 200,   0),
-}
 
 
 class DetectorNode(Node):
@@ -88,6 +60,9 @@ class DetectorNode(Node):
         self._first_frame     = True
         self._last_infer_time = 0.0
 
+        self._confirm_counts  = {}  # event_type -> 연속 감지 횟수
+        self._active_events   = {}  # event_type -> (x, y, timestamp)
+
         self.create_subscription(
             CameraInfo,
             f'{self.ns}/oakd/rgb/camera_info',
@@ -117,9 +92,8 @@ class DetectorNode(Node):
                     f'[{self.ns}] K 행렬 수신: fx={self._K[0,0]:.1f}, fy={self._K[1,1]:.1f}')
 
     def _cb_synced(self, rgb_msg: CompressedImage, depth_msg: CompressedImage):
-        import time
         now = time.monotonic()
-        if now - self._last_infer_time < 3.0:
+        if now - self._last_infer_time < 1.0:
             return
         self._last_infer_time = now
 
@@ -181,6 +155,8 @@ class DetectorNode(Node):
                     continue
 
                 cu, cv_ = (x1 + x2) // 2, (y1 + y2) // 2
+                if cv_ < frame.shape[0] * 0.3:
+                    continue
 
                 obj_x, obj_y = None, None
                 if K is not None and depth is not None and camera_frame:
@@ -217,7 +193,38 @@ class DetectorNode(Node):
         img_msg.header = header
         self._pub_img.publish(img_msg)
 
-        if not events:
+        # ── 1. 확증 카운터: 이번 프레임에서 감지된 event_type 집합 ──────────
+        detected_types = {ev['event_type'] for ev in events}
+        for et in list(self._confirm_counts):
+            if et not in detected_types:
+                self._confirm_counts[et] = 0  # 이번 프레임 미감지 → 리셋
+
+        confirmed = []
+        now_ts = time.monotonic()
+        for ev in events:
+            et = ev['event_type']
+            self._confirm_counts[et] = self._confirm_counts.get(et, 0) + 1
+            if self._confirm_counts[et] < 2:
+                continue  # 아직 확증 안 됨
+
+            # ── 2. 중복 억제: 10분 이내 같은 위치(1.0m) 동일 이벤트 ──────
+            active = self._active_events.get(et)
+            if active is not None:
+                ax, ay, at = active
+                elapsed = now_ts - at
+                if elapsed < 600.0:  # 10분
+                    x, y = ev['obj_x'], ev['obj_y']
+                    if x is None or ax is None:
+                        continue  # 위치 모르면 동일 사건으로 간주
+                    if math.hypot(x - ax, y - ay) < 1.0:
+                        continue  # 동일 사건 — 억제
+                # 10분 초과 or 위치 1.0m 이상 이탈 → 새 사건
+
+            confirmed.append(ev)
+            self._active_events[et] = (ev['obj_x'], ev['obj_y'], now_ts)
+            self._confirm_counts[et] = 0  # pub 후 카운터 리셋
+
+        if not confirmed:
             return
 
         ts            = datetime.now(timezone.utc)
@@ -226,7 +233,7 @@ class DetectorNode(Node):
         snapshot_name = f'img_{robot_id}_{ts.strftime("%Y%m%d_%H%M%S_%f")}.jpg'
         cv2.imwrite(str(SNAPSHOT_DIR / snapshot_name), vis)
 
-        for ev in events:
+        for ev in confirmed:
             payload = {
                 'msg_id':       str(uuid.uuid4()),
                 'version':      '2.0',
@@ -246,7 +253,7 @@ class DetectorNode(Node):
             msg.data = json.dumps(payload, ensure_ascii=False)
             self._pub_event.publish(msg)
 
-        self.get_logger().info(f'[{self.ns}] IF-05 발행: {[ev["class"] for ev in events]}')
+        self.get_logger().info(f'[{self.ns}] IF-05 발행: {[ev["class"] for ev in confirmed]}')
 
 
 def main(args=None):
