@@ -12,6 +12,8 @@
 //  (or put them in user_interface/.env — see .env.example)
 // ============================================================================
 import 'dotenv/config';
+import { mkdir, writeFile, appendFile } from 'node:fs/promises';
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import Anthropic from '@anthropic-ai/sdk';
@@ -145,6 +147,25 @@ app.get('/api/health', (_req, res) =>
     model: LLM_MODEL,
   }),
 );
+
+// UI 콘솔 로그 기록(개발용): 브라우저 console 출력을 logs/ui-console.txt 에 적재.
+// reset=true(세션 첫 전송)면 파일을 새로 쓰고, 이후엔 append. (cwd = alfred_interaction/)
+const LOG_FILE = path.join(process.cwd(), 'logs', 'ui-console.txt');
+app.post('/api/log', async (req, res) => {
+  try {
+    const { lines, reset } = req.body ?? {};
+    if (!Array.isArray(lines)) {
+      return res.status(400).json({ error: 'lines[] required' });
+    }
+    await mkdir(path.dirname(LOG_FILE), { recursive: true });
+    const text = lines.join('\n') + '\n';
+    await (reset ? writeFile(LOG_FILE, text) : appendFile(LOG_FILE, text));
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[log] error', err);
+    return res.status(500).json({ error: 'log_failed' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`[ALFRED proxy] listening on http://localhost:${PORT}`);
