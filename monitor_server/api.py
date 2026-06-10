@@ -335,6 +335,71 @@ def create_app(registry) -> Flask:
             },
         })
 
+    # ── 검색 탭 통계: 로봇 / 상태(robot_status_log) / 이벤트 집계 ──────────
+    @app.get("/api/search_stats")
+    def search_stats():
+        # 상태 분포 (robot_status_log) — 검색 'status' 데이터 집계
+        status_by_state = {
+            (r["state"] or "UNKNOWN"): r["c"]
+            for r in db.query_all(
+                "SELECT state, COUNT(*) c FROM robot_status_log "
+                "GROUP BY state ORDER BY c DESC")
+        }
+        status_total = _count("SELECT COUNT(*) c FROM robot_status_log")
+        log_by_robot = {
+            r["robot_id"]: r["c"]
+            for r in db.query_all(
+                "SELECT robot_id, COUNT(*) c FROM robot_status_log GROUP BY robot_id")
+        }
+        ev_by_robot = {
+            (r["robot_id"] or "UNKNOWN"): r["c"]
+            for r in db.query_all(
+                "SELECT robot_id, COUNT(*) c FROM events GROUP BY robot_id")
+        }
+
+        # 이벤트 type/class/total/active — events 탭과 동일 소스(_sb_events 우선)
+        if _sb_events:
+            es = _sb_events.event_stats()
+            ev_by_type, ev_by_class = es["by_type"], es["by_class"]
+            ev_total, ev_active = es["total"], es["active"]
+        else:
+            ev_by_type = {
+                (r["event_type"] or "UNKNOWN"): r["c"]
+                for r in db.query_all(
+                    "SELECT event_type, COUNT(*) c FROM events GROUP BY event_type")
+            }
+            ev_by_class = {
+                r["event_class"]: r["c"]
+                for r in db.query_all(
+                    "SELECT event_class, COUNT(*) c FROM events "
+                    "WHERE event_class IS NOT NULL GROUP BY event_class")
+            }
+            ev_total = _count("SELECT COUNT(*) c FROM events")
+            ev_active = _count("SELECT COUNT(*) c FROM events WHERE resolved=0")
+
+        # 로봇별 요약 (현재 상태 + 누적 집계)
+        robots = []
+        for snap in _robot_snapshots():
+            rid = snap.get("robot_id")
+            robots.append({
+                "robot_id": rid,
+                "state": snap.get("state"),
+                "battery": snap.get("battery"),
+                "floor": snap.get("floor"),
+                "online": snap.get("online"),
+                "log_count": log_by_robot.get(rid, 0),
+                "event_count": ev_by_robot.get(rid, 0),
+            })
+
+        return jsonify({
+            "robots": robots,
+            "status": {"total": status_total, "by_state": status_by_state,
+                       "by_robot": log_by_robot},
+            "events": {"total": ev_total, "active": ev_active,
+                       "by_type": ev_by_type, "by_class": ev_by_class,
+                       "by_robot": ev_by_robot},
+        })
+
     @app.get("/api/system")
     def system():
         db_ok = True
