@@ -83,6 +83,9 @@ export interface AppStrings {
   waiting: {
     caption: string;
     subtitle: string;
+    /** GO_HANDOVER: robot is driving to the 2F pickup point. */
+    handover: string;
+    handoverSub: string;
     transfer: (toFloor: string) => string;
   };
   staff: { title: string; description: string; note: string; close: string };

@@ -21,7 +21,12 @@ export type KioskScreen =
  * and the user should move to `toFloorId` (the cross-floor handoff).
  */
 export interface WaitingInfo {
-  kind: 'waiting' | 'transfer';
+  /**
+   * `waiting` = robot parked, waiting for the user. `transfer` = this floor's
+   * escort is done, move to `toFloorId`. `handover` = robot is driving to the
+   * 2F handover/pickup point (GO_HANDOVER, just before WAITING_2F).
+   */
+  kind: 'waiting' | 'transfer' | 'handover';
   /** For 'transfer': the floor id the user should move to (e.g. 'F2'). */
   toFloorId?: string;
 }

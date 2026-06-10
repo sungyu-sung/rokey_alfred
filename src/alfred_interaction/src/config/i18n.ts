@@ -65,6 +65,8 @@ const ko: AppStrings = {
   waiting: {
     caption: '잠시만 기다려 주세요',
     subtitle: '곧 안내를 이어갈게요',
+    handover: '안내를 준비하고 있어요',
+    handoverSub: '곧 모시러 갈게요',
     transfer: (toFloor) => `이 층 안내가 끝났어요 · ${toFloor}로 이동해 주세요`,
   },
   staff: {
@@ -136,6 +138,8 @@ const en: AppStrings = {
   waiting: {
     caption: 'Please wait a moment',
     subtitle: "I'll continue shortly",
+    handover: 'Getting ready to guide you',
+    handoverSub: "I'm on my way to you",
     transfer: (toFloor) => `Done on this floor · please head to ${toFloor}`,
   },
   staff: {
@@ -207,6 +211,8 @@ const ja: AppStrings = {
   waiting: {
     caption: '少々お待ちください',
     subtitle: 'まもなく案内を続けます',
+    handover: 'ご案内の準備中です',
+    handoverSub: '今からお迎えにあがります',
     transfer: (toFloor) => `この階のご案内は終了 · ${toFloor}へお進みください`,
   },
   staff: {
@@ -276,6 +282,8 @@ const zh: AppStrings = {
   waiting: {
     caption: '请稍候',
     subtitle: '马上继续为您带路',
+    handover: '正在准备向导',
+    handoverSub: '马上来接您',
     transfer: (toFloor) => `本层向导结束 · 请前往${toFloor}`,
   },
   staff: {
