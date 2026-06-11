@@ -98,16 +98,27 @@
   #staleBanner.show{display:block;animation:alarmpulse 1.4s infinite}
   /* ── 모바일(폰) 최적화 — 보안팀 원격 접속은 폰이 주 사용처 ── */
   @media(max-width:640px){
-    main{padding:11px 10px}
+    main{padding:11px 10px 78px}                       /* 하단 고정 탭바 높이만큼 여백 */
     header{padding:10px 12px;gap:8px;align-items:center}
     .brand{flex:1;min-width:0}
     h1{font-size:15px;overflow:hidden;text-overflow:ellipsis}
     .brand .sub{display:none}                         /* 좁은 폭에서 부제 숨김 */
-    .tabs{order:5;width:100%;margin-left:0;gap:5px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
-    .tab{padding:8px 11px;font-size:13px}             /* 터치 타깃 확보 */
     #clock{display:none}                              /* 좁은 폭에선 시계 생략 */
     .live{padding:3px 7px}#conn{display:none}
     .logout{padding:6px 10px}
+    /* ── 하단 고정 탭바 — 엄지로 닿는 위치에 아이콘+라벨 ── */
+    .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;width:100%;margin:0;gap:0;
+      justify-content:space-around;overflow:visible;
+      background:linear-gradient(180deg,#0b121d,#070b12);border-top:1px solid var(--line);
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -3px 14px rgba(0,0,0,.42)}
+    .tab{flex:1;border:0;border-radius:8px;background:transparent;color:var(--muted);
+      display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;min-width:0}
+    .tab .tlabel{display:none}                         /* 풀 라벨 숨기고 짧은 라벨 사용 */
+    .tab::before{content:attr(data-icon);font-size:19px;line-height:1}
+    .tab::after{content:attr(data-short);font-size:10.5px;font-weight:600;letter-spacing:-.02em}
+    .tab:hover{border:0;color:var(--text)}
+    .tab.on{background:transparent;color:var(--accent)}
+    .tab.on::before{filter:drop-shadow(0 0 6px var(--accent))}
     .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .kpi .value,.sit-kpi .kpi .value{font-size:23px}
     .kpi .label,.kpi .foot{font-size:11px}
@@ -122,6 +133,17 @@
     .alarm-card .info{flex:1 1 100%}
     .alarm-card .acts{flex:1 1 100%}
     .alarm-card .acts .ebtn{flex:1;justify-content:center}
+    /* ── 데이터 표 → 카드 리스트 (가로 스크롤 제거, 한눈에) ── */
+    .rtable thead{display:none}
+    .rtable,.rtable tbody{display:block;width:100%}
+    .rtable tr{display:block;border:1px solid var(--line);border-radius:10px;
+      background:var(--panel2);padding:10px 12px;margin-bottom:10px}
+    .rtable td{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;
+      border:0;padding:5px 0;font-size:13px;text-align:right;word-break:break-word}
+    .rtable td+td{border-top:1px dashed rgba(255,255,255,.06)}
+    .rtable td::before{content:attr(data-label);color:var(--muted);font-size:11px;font-weight:600;
+      text-align:left;flex:0 0 auto;text-transform:uppercase;letter-spacing:.03em}
+    .rtable td:first-child{padding-top:0}.rtable td:last-child{padding-bottom:0}
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -163,12 +185,12 @@
     <span class="sub">remote situational display</span>
   </div>
   <nav class="tabs">
-    <button class="tab on" data-tab="overview">상황판</button>
-    <button class="tab" data-tab="ops">운영 통계</button>
-    <button class="tab" data-tab="events">이벤트</button>
-    <button class="tab" data-tab="map">3D 관제</button>
-    <button class="tab" data-tab="system">시스템</button>
-    <button class="tab" data-tab="search">분실물 검색</button>
+    <button class="tab on" data-tab="overview" data-icon="🗺️" data-short="상황판"><span class="tlabel">상황판</span></button>
+    <button class="tab" data-tab="ops" data-icon="📊" data-short="통계"><span class="tlabel">운영 통계</span></button>
+    <button class="tab" data-tab="events" data-icon="🔔" data-short="이벤트"><span class="tlabel">이벤트</span></button>
+    <button class="tab" data-tab="map" data-icon="🧭" data-short="3D"><span class="tlabel">3D 관제</span></button>
+    <button class="tab" data-tab="system" data-icon="⚙️" data-short="시스템"><span class="tlabel">시스템</span></button>
+    <button class="tab" data-tab="search" data-icon="🔍" data-short="분실물"><span class="tlabel">분실물 검색</span></button>
   </nav>
   <span class="spacer"></span>
   <span class="live"><i></i>LIVE</span>
@@ -361,13 +383,13 @@ function renderTimeline(events){
   }).join('') : '<div class="empty">수신된 이벤트 없음</div>';
 }
 function renderEvents(id, events, active=false){
-  $(id).innerHTML = events.length ? `<table><tr><th>type/class</th><th>robot</th><th>loc</th><th>snapshot</th><th>time</th><th></th></tr>`+
+  $(id).innerHTML = events.length ? `<table class="rtable"><thead><tr><th>type/class</th><th>robot</th><th>loc</th><th>snapshot</th><th>time</th><th></th></tr></thead><tbody>`+
     events.map(e=>`<tr>
-      <td><span class="badge ${e.resolved?'gray':'red'}">${esc(eventName(e))}</span><br><span class="muted">${esc(e.confidence ?? '-')}</span></td>
-      <td>${esc(e.robot_id)}</td><td>${esc(e.floor ?? '-') }F / ${esc(e.x ?? '-')}, ${esc(e.y ?? '-')}</td>
-      <td class="muted">${esc(e.snapshot_ref || '-')}</td><td class="muted">${time(e.at)}</td>
-      <td>${active ? `<button class="btn" onclick="resolveEvent(${e.id})">조치완료</button>` : (e.resolved ? '<span class="muted">완료</span>' : '')}</td>
-    </tr>`).join('') + `</table>` : '<div class="empty">없음</div>';
+      <td data-label="유형"><span class="badge ${e.resolved?'gray':'red'}">${esc(eventName(e))}</span><br><span class="muted">${esc(e.confidence ?? '-')}</span></td>
+      <td data-label="로봇">${esc(e.robot_id)}</td><td data-label="위치">${esc(e.floor ?? '-') }F / ${esc(e.x ?? '-')}, ${esc(e.y ?? '-')}</td>
+      <td class="muted" data-label="스냅샷">${esc(e.snapshot_ref || '-')}</td><td class="muted" data-label="시간">${time(e.at)}</td>
+      <td data-label="조치">${active ? `<button class="btn" onclick="resolveEvent(${e.id})">조치완료</button>` : (e.resolved ? '<span class="muted">완료</span>' : '')}</td>
+    </tr>`).join('') + `</tbody></table>` : '<div class="empty">없음</div>';
 }
 function renderSystem(sys){
   const ros = sys.ros || {}, db = sys.db || {}, r = sys.robots || {}, c = sys.counts || {};
@@ -466,15 +488,15 @@ async function search(){
       .some(v => String(v ?? '').toLowerCase().includes(q)));
   }
   $('searchResult').innerHTML = items.length
-    ? `<table><tr><th>class</th><th>robot</th><th>loc</th><th>snapshot</th><th>time</th><th>상태</th></tr>` +
+    ? `<table class="rtable"><thead><tr><th>class</th><th>robot</th><th>loc</th><th>snapshot</th><th>time</th><th>상태</th></tr></thead><tbody>` +
       items.map(e=>`<tr>
-        <td>${esc(e.event_class || '분실물')}</td>
-        <td>${esc(e.robot_id)}</td>
-        <td>${esc(e.floor ?? '-')}F / ${esc(e.x ?? '-')}, ${esc(e.y ?? '-')}</td>
-        <td class="muted">${esc(e.snapshot_ref || '-')}</td>
-        <td class="muted">${time(e.at)}</td>
-        <td><span class="badge ${e.resolved?'gray':'red'}">${e.resolved?'회수':'미회수'}</span></td>
-      </tr>`).join('') + `</table>`
+        <td data-label="분류">${esc(e.event_class || '분실물')}</td>
+        <td data-label="로봇">${esc(e.robot_id)}</td>
+        <td data-label="위치">${esc(e.floor ?? '-')}F / ${esc(e.x ?? '-')}, ${esc(e.y ?? '-')}</td>
+        <td class="muted" data-label="스냅샷">${esc(e.snapshot_ref || '-')}</td>
+        <td class="muted" data-label="시간">${time(e.at)}</td>
+        <td data-label="상태"><span class="badge ${e.resolved?'gray':'red'}">${e.resolved?'회수':'미회수'}</span></td>
+      </tr>`).join('') + `</tbody></table>`
     : `<div class="empty">${q?'검색 결과 없음':'분실물 기록 없음'}</div>`;
 }
 let timer;

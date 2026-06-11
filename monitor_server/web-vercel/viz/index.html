@@ -160,10 +160,20 @@
   .edithint{position:absolute;left:50%;top:118px;transform:translateX(-50%);z-index:26;color:var(--cyan);font-size:12px;
     background:var(--panel);border:1px solid var(--panel-edge);padding:7px 16px;border-radius:20px;display:none;letter-spacing:.3px}
   .edithint.show{display:block}
+  /* 맵 편집 기능 비활성화(외부 배포본) — 웹/모바일 모두 편집 UI 제거 */
+  .editbar, .editpanel, .edithint{display:none !important}
   /* 임베드 모드(iframe): 3D 맵 + 층 전환만, 나머지 UI 숨김 */
   body.embed .topbar, body.embed .panel, body.embed .footbar, body.embed .hint,
   body.embed .alarm, body.embed .editbar, body.embed .editpanel, body.embed .edithint{display:none !important}
   body.embed .floorsel{top:14px}
+  /* 좁은 폭(폰 iframe): 층 버튼이 맵을 가리지 않게 컴팩트화 */
+  @media(max-width:640px){
+    .floorsel{left:8px;gap:6px}
+    body.embed .floorsel{top:8px}
+    .fbtn{width:42px;height:42px;border-radius:10px}
+    .fbtn .n{font-size:14px}
+    .fbtn .l{font-size:7.5px;letter-spacing:.5px;margin-top:1px}
+  }
   /* norobot 모드(대시보드 임베드 등): 좌측 로봇 상태 패널만 숨김 */
   body.norobot .panel.left{display:none !important}
   /* 로그인 오버레이 */
@@ -276,7 +286,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <span><span class="mk" style="border-color:var(--cyan);box-shadow:0 0 10px rgba(0,190,255,.6)"></span>TurtleBot4</span>
   <span><span style="width:22px;border-top:2px dashed var(--cyan);display:inline-block"></span>이동 경로</span>
 </div>
-<div class="hint" id="hint">드래그: 회전 · 휠: 줌 · 1F/2F/통합 버튼으로 뷰 전환</div>
+<div class="hint" id="hint">드래그/한 손가락: 회전 · 휠/핀치: 줌 · 1F/2F/통합 버튼으로 뷰 전환</div>
 
 <!-- Map editor -->
 <div class="edithint" id="edithint">편집 모드 · 항목 클릭 후 드래그로 이동 · 통합뷰에선 1·2층 모두 편집</div>
@@ -721,18 +731,43 @@ $('pRot').addEventListener('click',()=>{ const it=(selId&&selFloor)?itemById(sel
 $('pDup').addEventListener('click',()=>{ const it=(selId&&selFloor)?itemById(selId,selFloor):null; if(!it)return; const c=JSON.parse(JSON.stringify(it)); c.id='z'+Date.now(); c.x+=10; c.z+=10; dataOf(selFloor).push(c); rebuildFloor(selFloor); saveLS(); selectItem(c.id,selFloor); });
 $('pDel').addEventListener('click',()=>{ if(!selId||!selFloor)return; const arr=dataOf(selFloor); const i=arr.findIndex(x=>x.id===selId); if(i<0)return; arr.splice(i,1); rebuildFloor(selFloor); saveLS(); selectItem(null,null); });
 
-// ===== Interaction: rotate + zoom + (edit) move =====
+// ===== Interaction: rotate + zoom + (edit) move  (마우스 + 터치/핀치) =====
 let camDragging=false,px=0;
-renderer.domElement.addEventListener('pointerdown',e=>{
-  if(editMode){
+const cv = renderer.domElement;
+cv.style.touchAction='none';           // 터치 드래그가 페이지 스크롤로 가로채이지 않게
+const ptrs=new Map();                  // 활성 포인터(멀티터치) 추적
+let pinchD=0;                          // 핀치 시작 시 두 손가락 거리
+function ptrDist(){
+  const p=[...ptrs.values()]; if(p.length<2) return 0;
+  return Math.hypot(p[0].x-p[1].x, p[0].y-p[1].y);
+}
+cv.addEventListener('pointerdown',e=>{
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(editMode && ptrs.size===1){
     const hit=pickItem(e);
     if(hit){ selectItem(hit.userData.id, hit.userData.floor); objDrag=true; return; }
     selectItem(null,null);
   }
-  camDragging=true; px=e.clientX;
+  if(ptrs.size>=2){ camDragging=false; objDrag=false; pinchD=ptrDist(); }  // 두 손가락 → 핀치 줌
+  else { camDragging=true; px=e.clientX; }
 });
-addEventListener('pointerup',()=>{ if(objDrag){ objDrag=false; saveLS(); } camDragging=false; });
+function endPtr(e){
+  ptrs.delete(e.pointerId);
+  if(objDrag){ objDrag=false; saveLS(); }
+  if(ptrs.size<2) pinchD=0;
+  if(ptrs.size===0) camDragging=false;
+  else if(ptrs.size===1){ camDragging=true; px=[...ptrs.values()][0].x; }  // 한 손가락 남으면 회전 재개
+}
+addEventListener('pointerup',endPtr);
+addEventListener('pointercancel',endPtr);
 addEventListener('pointermove',e=>{
+  if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size>=2){              // 핀치 줌: 손가락 거리 비율로 camV 조절
+    const d=ptrDist();
+    if(pinchD && d){ camV=Math.max(24,Math.min(220,camV*(pinchD/d))); setCam(); }
+    pinchD=d; return;
+  }
   if(objDrag && selId && selFloor){
     setNDC(e); ray.setFromCamera(ndc,cam);
     dragPlane.constant = -(floorGroup[selFloor].position.y + 0.5);
@@ -745,7 +780,7 @@ addEventListener('pointermove',e=>{
   }
   if(camDragging){ camAngle+=(e.clientX-px)*0.005; px=e.clientX; setCam(); }
 });
-renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();camV=Math.max(24,Math.min(220,camV+e.deltaY*0.08));setCam();},{passive:false});
+cv.addEventListener('wheel',e=>{e.preventDefault();camV=Math.max(24,Math.min(220,camV+e.deltaY*0.08));setCam();},{passive:false});
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);setCam();});
 renderer.setSize(innerWidth,innerHeight);
 
