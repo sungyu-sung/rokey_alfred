@@ -386,8 +386,8 @@ class EscortStateBridgeNode(Node):
             self._publish_ui(self._dock_robot or "robot2", UNDOCKING)
 
         elif state in EMERGENCY_STATES:
-            robot = self._emergency_robot or 'robot2'
-            self._publish_ui(robot, state)
+            self._publish_ui("robot2", state)
+            self._publish_ui("robot4", state)
 
         elif state == PATROL:
             self._publish_ui("robot2", PATROL)
