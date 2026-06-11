@@ -83,6 +83,10 @@ class DetectorNode(Node):
         self._pub_event = self.create_publisher(String, f'{self.ns}/detection/info',  10)
         self._pub_img   = self.create_publisher(Image,  f'{self.ns}/detection/image', 10)
 
+        from std_msgs.msg import Empty
+        self.create_subscription(Empty, f'{self.ns}/emergency_resolve',
+                                 self._cb_emergency_resolve, 10)
+
         self.get_logger().info(f'[{self.ns}] 구독/퍼블리시 설정 완료')
 
     def _cb_camera_info(self, msg: CameraInfo):
@@ -120,6 +124,11 @@ class DetectorNode(Node):
             self._process(frame, rgb_msg.header)
         except Exception as e:
             self.get_logger().error(f'[{self.ns}] 동기화 콜백 오류: {e}')
+
+    def _cb_emergency_resolve(self, _msg):
+        with self._lock:
+            self._active_events.clear()
+        self.get_logger().info(f'[{self.ns}] emergency_resolve → active_events 초기화')
 
     def _near_dock(self) -> bool:
         dock_pos = DOCK_POSITIONS.get(self.ns)
