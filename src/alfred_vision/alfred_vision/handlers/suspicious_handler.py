@@ -1,13 +1,9 @@
 import json
-import math
 import time
 from enum import Enum
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Empty, String
-from rclpy.duration import Duration
-from rclpy.time import Time
 
-_STEP_SIZE = 0.5
 _LOST_SEC  = 10.0
 
 
@@ -18,10 +14,9 @@ class _State(Enum):
 
 
 class SuspiciousHandler:
-    def __init__(self, node, ns: str, tf_buffer, has_patrol: bool = True):
+    def __init__(self, node, ns: str, tf_buffer=None, has_patrol: bool = True):
         self._node        = node
         self._ns          = ns
-        self._tf_buffer   = tf_buffer
         self._has_patrol  = has_patrol
         self._state       = _State.IDLE
         self._latest_x    = None
@@ -33,9 +28,9 @@ class SuspiciousHandler:
         self._pub_goal   = node.create_publisher(PoseStamped, f'{ns}/goal_pose_request',     10)
         self._pub_resume = node.create_publisher(Empty,       f'{ns}/resume_patrol_request', 10)
 
-        node.create_subscription(String, f'{ns}/nav_status',       self._cb_nav_status,        10)
-        node.create_subscription(String, f'{ns}/detection/info',   self._cb_detection,         10)
-        node.create_subscription(Empty,  f'{ns}/emergency_resolve', self._cb_emergency_resolve, 10)
+        node.create_subscription(String, f'{ns}/nav_status',          self._cb_nav_status,        10)
+        node.create_subscription(String, f'{ns}/suspicious/location', self._cb_sus_location,      10)
+        node.create_subscription(Empty,  f'{ns}/emergency_resolve',   self._cb_emergency_resolve, 10)
 
     def is_active(self) -> bool:
         return self._state != _State.IDLE
@@ -65,23 +60,17 @@ class SuspiciousHandler:
         else:
             self._step_toward()
 
-    def _cb_detection(self, msg: String):
+    def _cb_sus_location(self, msg: String):
         if self._state != _State.FOLLOWING:
             return
         try:
             data = json.loads(msg.data)
         except json.JSONDecodeError:
             return
-
-        if data.get('event_type') != 'SUSPICIOUS_PERSON':
-            return
-
-        loc = data.get('location', {})
-        x   = loc.get('x')
-        y   = loc.get('y')
+        x = data.get('x')
+        y = data.get('y')
         if x is None or y is None:
             return
-
         self._latest_x   = x
         self._latest_y   = y
         self._last_det_t = time.monotonic()
@@ -114,29 +103,9 @@ class SuspiciousHandler:
             self._state = _State.WAITING_RESOLVE
             return
 
-        try:
-            t  = self._tf_buffer.lookup_transform(
-                'map', 'base_link', Time(), timeout=Duration(seconds=0.5))
-            rx = t.transform.translation.x
-            ry = t.transform.translation.y
-        except Exception as e:
-            self._node.get_logger().warn(f'[{self._ns}] TF 조회 실패: {e}')
-            return
-
-        dx   = self._latest_x - rx
-        dy   = self._latest_y - ry
-        dist = math.hypot(dx, dy)
-
-        if dist <= _STEP_SIZE:
-            gx, gy = self._latest_x, self._latest_y
-        else:
-            gx = rx + (dx / dist) * _STEP_SIZE
-            gy = ry + (dy / dist) * _STEP_SIZE
-
-        self._send_goal(gx, gy)
+        self._send_goal(self._latest_x, self._latest_y)
         self._node.get_logger().info(
-            f'[{self._ns}] 0.5m step → ({gx:.2f}, {gy:.2f}), '
-            f'목표=({self._latest_x:.2f}, {self._latest_y:.2f})')
+            f'[{self._ns}] 목표 위치 이동 → ({self._latest_x:.2f}, {self._latest_y:.2f})')
 
     def _send_goal(self, x: float, y: float):
         goal = PoseStamped()

@@ -9,5 +9,8 @@ __pycache__/
 viz_3d/node_modules/
 viz_3d/dist/
 CLAUDE.md
-src/alfred_vision/슬라이드_구성.md
-src/alfred_vision/ALFRED_지능1_김기현_김현중_백기동_성선규_안상헌_윤준수_이지민_이찬휘_최진우_한인희.pptx
+src/alfred_vision/**/*.md
+src/alfred_vision/**/*.pptx
+src/alfred_vision/**/*.png
+src/alfred_vision/**/*.jpg
+src/alfred_vision/ppt_parts/

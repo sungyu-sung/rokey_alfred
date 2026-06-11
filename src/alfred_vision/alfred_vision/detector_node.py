@@ -61,8 +61,8 @@ class DetectorNode(Node):
         self._first_frame     = True
         self._last_infer_time = 0.0
 
-        self._confirm_counts = {}
-        self._active_events  = {}
+        self._confirm_counts  = {}
+        self._active_events   = {}
 
         self.create_subscription(
             CameraInfo,
@@ -80,12 +80,15 @@ class DetectorNode(Node):
         ts = ApproximateTimeSynchronizer([rgb_sub, depth_sub], queue_size=10, slop=0.1)
         ts.registerCallback(self._cb_synced)
 
-        self._pub_event = self.create_publisher(String, f'{self.ns}/detection/info',  10)
-        self._pub_img   = self.create_publisher(Image,  f'{self.ns}/detection/image', 10)
+        self._pub_event    = self.create_publisher(String, f'{self.ns}/detection/info',         10)
+        self._pub_img      = self.create_publisher(Image,  f'{self.ns}/detection/image',        10)
+        self._pub_sus_loc  = self.create_publisher(String, f'{self.ns}/suspicious/location',    10)
 
         from std_msgs.msg import Empty
         self.create_subscription(Empty, f'{self.ns}/emergency_resolve',
                                  self._cb_emergency_resolve, 10)
+        self.create_subscription(String, '/astra/detection/info',
+                                 self._cb_astra, 10)
 
         self.get_logger().info(f'[{self.ns}] 구독/퍼블리시 설정 완료')
 
@@ -129,6 +132,44 @@ class DetectorNode(Node):
         with self._lock:
             self._active_events.clear()
         self.get_logger().info(f'[{self.ns}] emergency_resolve → active_events 초기화')
+
+    def _cb_astra(self, msg: String):
+        _ASTRA_CLASSES = {'knife', 'pistol2'}
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        cls = data.get('class', '')
+        if cls not in _ASTRA_CLASSES:
+            return
+        loc = data.get('location', {})
+        x   = loc.get('x')
+        y   = loc.get('y')
+        if x is None or y is None:
+            return
+
+        robot_id = ROBOT_ID_MAP.get(self.ns, self.ns.lstrip('/'))
+        floor    = FLOOR_MAP.get(self.ns, 1)
+        payload  = {
+            'msg_id':       str(uuid.uuid4()),
+            'version':      '2.0',
+            'event_type':   'SUSPICIOUS_PERSON',
+            'class':        cls,
+            'robot_id':     robot_id,
+            'confidence':   None,
+            'location':     {'x': x, 'y': y, 'floor': floor},
+            'snapshot_ref': None,
+            'timestamp':    datetime.now(timezone.utc).isoformat(),
+        }
+        out = String()
+        out.data = json.dumps(payload, ensure_ascii=False)
+        self._pub_event.publish(out)
+
+        loc_msg = String()
+        loc_msg.data = json.dumps({'x': x, 'y': y}, ensure_ascii=False)
+        self._pub_sus_loc.publish(loc_msg)
+
+        self.get_logger().debug(f'[{self.ns}] astra 탐지 → ({x}, {y})')
 
     def _near_dock(self) -> bool:
         dock_pos = DOCK_POSITIONS.get(self.ns)
@@ -178,6 +219,10 @@ class DetectorNode(Node):
                 x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
                 conf       = float(box.conf[0])
                 cls_name   = self.model.names[int(box.cls[0])]
+
+                if cls_name in ('knife', 'pistol2'):
+                    continue  # astra 담당 — OAK-D 무시
+
                 event_type = EVENT_TYPE_MAP.get(cls_name)
 
                 if event_type is None:
