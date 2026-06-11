@@ -99,6 +99,18 @@ app.post('/api/llm/understand', async (req, res) => {
     return res.json(out);
   } catch (err) {
     console.error('[llm] error', err);
+    // 키 무효(401)·API 오류를 구분해서 내려보냄 → 브라우저 로그만 봐도 원인 파악 가능
+    if (err instanceof Anthropic.AuthenticationError) {
+      return res.status(502).json({
+        error: 'anthropic_auth_failed',
+        hint: 'ANTHROPIC_API_KEY가 유효하지 않습니다. .env 갱신 후 proxy 재시작 필요',
+      });
+    }
+    if (err instanceof Anthropic.APIError) {
+      return res
+        .status(502)
+        .json({ error: 'anthropic_api_error', status: err.status });
+    }
     return res.status(500).json({ error: 'llm_failed' });
   }
 });

@@ -108,7 +108,7 @@ export const env = {
    * STT, cutting far/background voices. Lower = more permissive (e.g. -90 ≈ off);
    * raise toward -35 to gate more aggressively. Tune per mic/room.
    */
-  micGateDb: num(import.meta.env.VITE_MIC_GATE_DB, -30),
+  micGateDb: num(import.meta.env.VITE_MIC_GATE_DB, -45),
   /** Log measured mic level for tuning the gate (defaults on in dev builds). */
   micGateDebug:
     import.meta.env.VITE_MIC_GATE_DEBUG !== undefined

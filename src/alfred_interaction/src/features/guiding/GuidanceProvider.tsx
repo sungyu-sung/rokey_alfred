@@ -68,11 +68,16 @@ export function GuidanceProvider({ children }: { children: ReactNode }) {
           },
           origin: {
             floor: floorLevel(kioskConfig.currentFloorId),
-            pose: kioskConfig.originPose,
+            // VI(blind, 웨이크워드)는 로봇 대기 pose에서 만나고, 일반(터치 시설검색·
+            // 음성검색)은 키오스크 앞(x=-7.0)에서 픽업 — profile과 같은 조건으로 분기.
+            pose:
+              mode === 'visually_impaired'
+                ? kioskConfig.originPose
+                : kioskConfig.originPoseNormal,
           },
-          // VI mode (wake word) → profile VISUALLY_IMPAIRED (requirement).
+          // VI mode (wake word) → profile blind (requirement).
           customer: defaultCustomer(
-            mode === 'visually_impaired' ? 'VISUALLY_IMPAIRED' : 'GENERAL',
+            mode === 'visually_impaired' ? 'blind' : 'normal',
             language,
           ),
         });
