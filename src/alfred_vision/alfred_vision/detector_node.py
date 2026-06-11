@@ -148,28 +148,37 @@ class DetectorNode(Node):
         if x is None or y is None:
             return
 
-        robot_id = ROBOT_ID_MAP.get(self.ns, self.ns.lstrip('/'))
-        floor    = FLOOR_MAP.get(self.ns, 1)
-        payload  = {
-            'msg_id':       str(uuid.uuid4()),
-            'version':      '2.0',
-            'event_type':   'SUSPICIOUS_PERSON',
-            'class':        cls,
-            'robot_id':     robot_id,
-            'confidence':   None,
-            'location':     {'x': x, 'y': y, 'floor': floor},
-            'snapshot_ref': None,
-            'timestamp':    datetime.now(timezone.utc).isoformat(),
-        }
-        out = String()
-        out.data = json.dumps(payload, ensure_ascii=False)
-        self._pub_event.publish(out)
+        now_ts = time.monotonic()
+        with self._lock:
+            active = self._active_events.get('SUSPICIOUS_PERSON')
+            is_new = active is None or (now_ts - active[2]) >= 600.0
+            if is_new:
+                self._active_events['SUSPICIOUS_PERSON'] = (x, y, now_ts)
 
         loc_msg = String()
         loc_msg.data = json.dumps({'x': x, 'y': y}, ensure_ascii=False)
         self._pub_sus_loc.publish(loc_msg)
 
-        self.get_logger().debug(f'[{self.ns}] astra 탐지 → ({x}, {y})')
+        if is_new:
+            robot_id = ROBOT_ID_MAP.get(self.ns, self.ns.lstrip('/'))
+            floor    = FLOOR_MAP.get(self.ns, 1)
+            payload  = {
+                'msg_id':       str(uuid.uuid4()),
+                'version':      '2.0',
+                'event_type':   'SUSPICIOUS_PERSON',
+                'class':        cls,
+                'robot_id':     robot_id,
+                'confidence':   None,
+                'location':     {'x': x, 'y': y, 'floor': floor},
+                'snapshot_ref': None,
+                'timestamp':    datetime.now(timezone.utc).isoformat(),
+            }
+            out = String()
+            out.data = json.dumps(payload, ensure_ascii=False)
+            self._pub_event.publish(out)
+            self.get_logger().info(f'[{self.ns}] astra 최초 탐지 → SUSPICIOUS_PERSON ({cls}) @ ({x}, {y})')
+        else:
+            self.get_logger().debug(f'[{self.ns}] astra 위치 업데이트 → ({x}, {y})')
 
     def _near_dock(self) -> bool:
         dock_pos = DOCK_POSITIONS.get(self.ns)
