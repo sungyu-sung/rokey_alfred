@@ -82,7 +82,6 @@ class DetectorNode(Node):
 
         self._pub_event    = self.create_publisher(String, f'{self.ns}/detection/info',         10)
         self._pub_img      = self.create_publisher(Image,  f'{self.ns}/detection/image',        10)
-        self._pub_sus_loc  = self.create_publisher(String, f'{self.ns}/suspicious/location',    10)
 
         from std_msgs.msg import Empty
         self.create_subscription(Empty, f'{self.ns}/emergency_resolve',
@@ -154,10 +153,6 @@ class DetectorNode(Node):
             is_new = active is None or (now_ts - active[2]) >= 600.0
             if is_new:
                 self._active_events['SUSPICIOUS_PERSON'] = (x, y, now_ts)
-
-        loc_msg = String()
-        loc_msg.data = json.dumps({'x': x, 'y': y}, ensure_ascii=False)
-        self._pub_sus_loc.publish(loc_msg)
 
         if is_new:
             robot_id = ROBOT_ID_MAP.get(self.ns, self.ns.lstrip('/'))
