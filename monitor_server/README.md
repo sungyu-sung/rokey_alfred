@@ -113,6 +113,21 @@ python3 -c "import store;sb=store.SupabaseStore();sb.init();print(sb._request('G
 샌드박스/CI 등 **프로세스 간 DDS가 막힌 환경**에서의 적재 검증, 자세한 테스트 절차 →
 [`../docs/실행_및_테스트_가이드_monitor2.md`](../docs/실행_및_테스트_가이드_monitor2.md)
 
+### 패트롤 중 분실물 데모
+
+로컬 SQLite 대시보드에 순찰 이동과 분실물 발견을 한 번에 넣으려면:
+
+```bash
+cd monitor_server
+python3 tools/demo_patrol_lost_item.py
+```
+
+기존의 미조치 `LOST_ITEM` 데모를 먼저 정리하고 시작하려면:
+
+```bash
+python3 tools/demo_patrol_lost_item.py --clear-demo-event
+```
+
 ---
 
 ## 5. 모듈 / 토픽 / 테이블

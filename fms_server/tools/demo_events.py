@@ -23,7 +23,7 @@ import config  # noqa: E402
 import messages  # noqa: E402
 from transport import MqttTransport  # noqa: E402
 
-ALL_TYPES = ["FIRE", "SUSPICIOUS_PERSON", "EMERGENCY_PATIENT"]
+ALL_TYPES = ["FIRE", "SUSPICIOUS_PERSON", "EMERGENCY_PATIENT", "LOST_ITEM"]
 
 # 층별: 담당 로봇 + 맵 보정 중심(cx,cy) + 흩뿌릴 반경(rx,ry). viz_3d ROS_CALIB 와 동일 기준.
 FLOORS = {
