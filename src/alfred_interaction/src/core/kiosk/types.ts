@@ -21,9 +21,34 @@ export type KioskScreen =
  * and the user should move to `toFloorId` (the cross-floor handoff).
  */
 export interface WaitingInfo {
-  kind: 'waiting' | 'transfer';
+  /**
+   * `waiting` = robot parked, waiting for the user. `transfer` = this floor's
+   * escort is done, move to `toFloorId`. `handover` = robot is driving to the
+   * 2F handover/pickup point (GO_HANDOVER, just before WAITING_2F).
+   */
+  kind: 'waiting' | 'transfer' | 'handover';
   /** For 'transfer': the floor id the user should move to (e.g. 'F2'). */
   toFloorId?: string;
+}
+
+/** Robot-driven escort context (screen === 'guiding' without a local session). */
+export interface RobotEscortInfo {
+  /** Resolved destination name to show, or null for a generic "안내중". */
+  destinationName: string | null;
+  /** Progress 0..1 for the bar. */
+  ratio: number;
+  /**
+   * True between the kiosk confirming a destination (IF-01 sent) and the robot
+   * reporting ESCORT_1F/2F — shows a "준비 중" screen. Cleared once the robot's
+   * inbound state takes over.
+   */
+  preparing: boolean;
+  /**
+   * True after the robot reports ESCORT_COMPLETED — shows the "도착했어요!" screen
+   * briefly, then a timer (RobotStateProvider) returns to patrol. A trailing
+   * PATROL is ignored while this holds (see EXIT_ROBOT_SCREEN).
+   */
+  arrived: boolean;
 }
 
 /**
@@ -45,6 +70,10 @@ export interface KioskState {
   alert: DetectionType | null;
   /** Context while screen === 'waiting' (robot-state driven). */
   waiting: WaitingInfo | null;
+  /** Robot-driven escort context while screen === 'guiding' (no local session). */
+  escort: RobotEscortInfo | null;
+  /** Battery % while screen === 'charging' (from robot status), or null. */
+  chargeBattery: number | null;
 }
 
 export type KioskEvent =
@@ -61,6 +90,14 @@ export type KioskEvent =
   | { type: 'CLOSE_STAFF_CALL' }
   | { type: 'DETECTION'; detection: DetectionType } // YOLO alert (ver03) → alert
   | { type: 'CLEAR_ALERT' } // alert → patrol (staff dismiss)
-  | { type: 'ENTER_CHARGING' } // robot DOCKING / UNDOCKING → charging screen
+  | { type: 'ENTER_CHARGING'; battery?: number } // robot DOCKING / UNDOCKING → charging
   | { type: 'ENTER_WAITING'; info: WaitingInfo } // robot WAITING / FINISHED → waiting
-  | { type: 'EXIT_ROBOT_SCREEN' }; // charging/waiting → patrol (e.g. robot PATROL)
+  | {
+      type: 'ROBOT_ESCORT';
+      destinationName?: string | null;
+      ratio?: number;
+      /** Kiosk-initiated, robot not yet started → show "준비 중". */
+      preparing?: boolean;
+    } // ESCORT_* → guiding
+  | { type: 'ROBOT_ARRIVED' } // ESCORT_COMPLETED → "도착했어요!" hold → patrol
+  | { type: 'EXIT_ROBOT_SCREEN' }; // robot screen → patrol (e.g. robot PATROL)

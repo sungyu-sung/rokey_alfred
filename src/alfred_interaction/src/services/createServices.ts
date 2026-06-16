@@ -1,4 +1,10 @@
-import { env, kioskConfig, transferPointsOnFloor } from '@/config';
+import {
+  env,
+  getFacilityByPoiId,
+  kioskConfig,
+  transferPointsOnFloor,
+} from '@/config';
+import { MockRobotLink } from './MockRobotLink';
 import { MockRosService, RosBridgeClient } from './ros';
 import { MockSttService, SonioxSttService, type SttService } from './stt';
 import { ClaudeLlmService, MockLlmService, type LlmService } from './llm';
@@ -9,6 +15,16 @@ import {
   RosBridgeDetectionService,
   type DetectionService,
 } from './detection';
+import {
+  MockRobotStateService,
+  RosBridgeRobotStateService,
+  type RobotStateService,
+} from './robot-state';
+import {
+  MockRobotPoseService,
+  RosBridgeRobotPoseService,
+  type RobotPoseService,
+} from './robot-pose';
 import { WebSpeechTtsService } from './tts';
 import type { Services } from './types';
 
@@ -51,9 +67,35 @@ export function createDefaultServices(): Services {
   //   • Detections   — robot → /detection   (subscribe, requirement ver03)
   // With no URL (or mocks forced), both fall back to console/no-op so the UI
   // runs offline. See env.rosbridgeUrl / .env.
+  // Per-robot UI status topic (IF-02). Default derived from this kiosk's robot id
+  // (e.g. /robot2/ui_state); override with VITE_ROBOT_STATE_TOPIC.
+  const robotStateTopic =
+    env.robotStateTopic || `/${kioskConfig.robotId}/ui_state`;
+  const robotPoseTopic =
+    env.robotPoseTopic || `/${kioskConfig.robotId}/interacting_pose`;
+
   let fms: FmsService;
   let detection: DetectionService;
-  if (!env.useMocks && env.rosbridgeUrl) {
+  let robotState: RobotStateService;
+  let robotPose: RobotPoseService;
+  if (env.mockRobot) {
+    // mock-robot 데모: rosbridge·로봇 없이 IF-01(보냄) ↔ ui_state·pose(받음) 라운드트립.
+    // MockFmsService → MockRobotLink(가짜 로봇) → MockRobotStateService / MockRobotPoseService.
+    // (robotDrivesUi=true 이므로 GuidanceProvider는 로컬 시뮬 대신 이 인바운드를 따른다.)
+    const link = new MockRobotLink({
+      robotId: kioskConfig.robotId,
+      floor: env.floorNumber,
+      originPose: [kioskConfig.originPose.x, kioskConfig.originPose.y],
+      resolvePose: (poiId) => {
+        const pose = getFacilityByPoiId(poiId)?.pose;
+        return pose ? [pose.x, pose.y] : null;
+      },
+    });
+    fms = new MockFmsService(env.rosInfoTopic, env.rosInfoMsgType, link);
+    robotState = new MockRobotStateService(link);
+    robotPose = new MockRobotPoseService(link);
+    detection = new MockDetectionService(); // 비상은 window.alfredAlert(...)로 시연
+  } else if (!env.useMocks && env.rosbridgeUrl) {
     const bridge = new RosBridgeClient({ url: env.rosbridgeUrl });
     bridge.connect();
     // Advertise the type BEFORE any publish — rosbridge rejects a publish to a
@@ -61,13 +103,17 @@ export function createDefaultServices(): Services {
     if (env.rosInfoMsgType) bridge.advertise(env.rosInfoTopic, env.rosInfoMsgType);
     fms = new RosBridgeFmsService(bridge, env.rosInfoTopic, env.rosInfoMsgType);
     detection = new RosBridgeDetectionService(bridge, env.detectionTopics);
+    robotState = new RosBridgeRobotStateService(bridge, robotStateTopic);
+    robotPose = new RosBridgeRobotPoseService(bridge, robotPoseTopic);
   } else {
     fms = new MockFmsService(env.rosInfoTopic, env.rosInfoMsgType);
     detection = new MockDetectionService();
+    robotState = new MockRobotStateService();
+    robotPose = new MockRobotPoseService();
   }
 
   // Browser-native TTS — free/offline, no key (VI mode + emergency alerts).
   const tts = new WebSpeechTtsService();
 
-  return { ros, stt, llm, navigation, fms, detection, tts };
+  return { ros, stt, llm, navigation, fms, detection, robotState, robotPose, tts };
 }

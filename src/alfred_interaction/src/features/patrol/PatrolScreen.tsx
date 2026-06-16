@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RobotFace, ScreenFrame } from '@/components';
+import { ButlerFace, ScreenFrame } from '@/components';
 import { floorLevel, kioskConfig, useStrings } from '@/config';
 import { isWakeWordSupported, useAnyInput, useWakeWord } from '@/core/hooks';
 import { useLanguage } from '@/core/i18n';
@@ -63,12 +63,12 @@ export function PatrolScreen() {
     [fms, dispatch, language],
   );
 
-  useAnyInput(() => enterInteraction('GENERAL', 'WAKE'));
+  useAnyInput(() => enterInteraction('normal', 'WAKE'));
   useWakeWord({
     enabled: wakeOn && isWakeWordSupported(),
     language,
     phrases: WAKE_WORDS,
-    onWake: () => enterInteraction('VISUALLY_IMPAIRED', 'WAKE_VOICE'),
+    onWake: () => enterInteraction('blind', 'WAKE_VOICE'),
   });
 
   // Periodic self-introduction (accessibility).
@@ -101,7 +101,7 @@ export function PatrolScreen() {
   return (
     <ScreenFrame tone="dark" className={styles.screen}>
       <div className={styles.body}>
-        <RobotFace size="xl" />
+        <ButlerFace size="xl" />
       </div>
       <div className={styles.hints}>
         <p className={styles.hint}>{strings.patrol.hint}</p>
@@ -111,7 +111,7 @@ export function PatrolScreen() {
           onClick={(event) => {
             // Don't also trigger the window-level "any input → Home" wake.
             event.stopPropagation();
-            enterInteraction('VISUALLY_IMPAIRED', 'WAKE_VOICE');
+            enterInteraction('blind', 'WAKE_VOICE');
           }}
         >
           {strings.patrol.wakeHint}

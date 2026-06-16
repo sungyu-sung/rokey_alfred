@@ -9,6 +9,7 @@ export { env } from './env';
 export { messages, useStrings } from './i18n';
 export { facilities } from './facilities';
 export { floors, BLUEPRINT } from './floors';
+export { poseToFraction, hasFloorCalibration } from './mapCalibration';
 
 // ---- Lookups (kept here so features never index raw arrays themselves) ----
 
@@ -35,6 +36,11 @@ export function getFacilityOrThrow(facilityId: string): Facility {
   const facility = getFacility(facilityId);
   if (!facility) throw new Error(`Unknown facility: ${facilityId}`);
   return facility;
+}
+
+/** Facility by its FMS POI id (IF-01/IF-02 `poi_id`), e.g. 'WC' → 화장실. */
+export function getFacilityByPoiId(poiId: string): Facility | undefined {
+  return facilities.find((f) => f.poiId === poiId);
 }
 
 export function facilitiesOnFloor(floorId: string): Facility[] {
